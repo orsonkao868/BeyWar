@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>陀螺鬥士輔助系統 BeyWarrior</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <nav>
+    <div class="logo">⚡ BEY<span>WARRIOR</span></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchPage('scoreboard', this)">🏆 計分板</button>
+      <button class="nav-tab" onclick="switchPage('bracket', this)">🗂 分組賽制</button>
+      <button class="nav-tab" onclick="switchPage('parts', this)">⚙️ 零件庫</button>
+      <button class="nav-tab" onclick="switchPage('records', this)">📊 戰績記錄</button>
+    </div>
+  </nav>
+
+  <!-- PAGE 1：計分板 -->
+  <div id="page-scoreboard" class="page active">
+    <div class="section-header">
+      <div class="section-title">陀螺鬥士輔助系統</div>
+      <div class="section-sub">BeyWarrior｜點擊卡片 +1，長按 -1</div>
+    </div>
+
+    <div class="scoreboard">
+      <div class="player-card p1" id="card1"
+           onclick="addScore(1)"
+           oncontextmenu="subScore(1,event)"
+           ontouchstart="touchStart(1,event)"
+           ontouchend="touchEnd()"
+           ontouchmove="touchMove()">
+        <input class="player-name-input" id="p1name" value="選手 A" maxlength="20"
+               onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()">
+        <div class="score-display" id="score1">0</div>
+        <div class="score-hint">點擊整張卡片 +1 ／ 長按 -1</div>
+      </div>
+
+      <div class="vs-col"><div class="vs-text">VS</div></div>
+
+      <div class="player-card p2" id="card2"
+           onclick="addScore(2)"
+           oncontextmenu="subScore(2,event)"
+           ontouchstart="touchStart(2,event)"
+           ontouchend="touchEnd()"
+           ontouchmove="touchMove()">
+        <input class="player-name-input" id="p2name" value="選手 B" maxlength="20"
+               onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()">
+        <div class="score-display" id="score2">0</div>
+        <div class="score-hint">點擊整張卡片 +1 ／ 長按 -1</div>
+      </div>
+    </div>
+
+    <div class="score-actions">
+      <button class="btn btn-gold" onclick="declareWinner()">🏆 宣告勝利</button>
+      <button class="btn btn-secondary" onclick="resetScores()">🔄 重置比賽</button>
+      <button class="btn btn-secondary" onclick="saveMatch()">💾 記錄比賽</button>
+    </div>
+    <div class="credit">製作人：OK</div>
+  </div>
+
+  <!-- 勝利覆蓋層 -->
+  <div class="overlay" id="victoryOverlay">
+    <div class="victory-box">
+      <div class="victory-crown">👑</div>
+      <div class="victory-label">勝利者</div>
+      <div class="victory-name" id="victoryName">—</div>
+      <div class="victory-score" id="victoryScore"></div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-gold" onclick="closeVictory()">🎉 繼續</button>
+        <button class="btn btn-secondary" onclick="resetScores();closeVictory()">重置比賽</button>
+      </div>
+    </div>
+  </div>
+  <div class="confetti-wrap" id="confettiWrap"></div>
+
+  <!-- PAGE 2：分組晉級賽 -->
+  <div id="page-bracket" class="page">
+    <div class="section-header">
+      <div class="section-title">分組晉級賽</div>
+      <div class="section-sub">選多少人就是多少人，奇數自動輪空晉級，最後 2-3 人直接點選</div>
+    </div>
+    <div class="inner-tabs">
+      <button class="inner-tab active" onclick="switchInner('bracket','setup',this)">⚙️ 設定</button>
+      <button class="inner-tab" onclick="switchInner('bracket','draw',this)">📋 賽表</button>
+    </div>
+    <div id="bracket-setup" class="inner-page active">
+      <div class="bracket-setup-wrap">
+        <div class="form-group">
+          <label class="form-label">參賽人數（最多 1000）</label>
+          <input type="number" class="form-input" id="playerCount"
+                 value="8" min="2" max="1000" oninput="genPlayerInputs()">
+          <div class="bracket-info" id="bracketInfo"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">選手名稱設定</label>
+          <div class="player-list-editor" id="playerListEditor"></div>
+        </div>
+        <div class="flex mt-16">
+          <button class="btn btn-gold" onclick="generateBracket()">🚀 生成賽表</button>
+          <button class="btn btn-secondary" onclick="resetBracket()">重置</button>
+        </div>
+      </div>
+    </div>
+    <div id="bracket-draw" class="inner-page">
+      <div class="flex" style="margin-bottom:16px;">
+        <button class="btn btn-secondary" onclick="backToSetup()">← 返回設定</button>
+        <button class="btn btn-secondary" onclick="generateBracket()">🔀 重新抽籤</button>
+      </div>
+      <div class="bracket-scroll-hint">← 左右滑動查看完整賽表 →</div>
+      <div class="bracket-container" id="bracketContainer"></div>
+    </div>
+  </div>
+
+  <!-- PAGE 3：零件資料庫 -->
+  <div id="page-parts" class="page">
+    <div class="section-header">
+      <div class="section-title">零件資料庫</div>
+      <div class="section-sub">依系列分類管理所有戰鬥陀螺零件</div>
+    </div>
+    <div class="inner-tabs">
+      <button class="inner-tab active" onclick="switchInner('parts','list',this);renderParts()">📦 我的零件</button>
+      <button class="inner-tab" onclick="switchInner('parts','add',this)">➕ 新增零件</button>
+      <button class="inner-tab" onclick="switchInner('parts','stats',this);renderPartStats()">📊 零件統計</button>
+    </div>
+    <div id="parts-list" class="inner-page active">
+      <div class="flex" style="margin-bottom:16px;gap:10px;flex-wrap:wrap;">
+        <input type="text" class="form-input" id="partSearch"
+               placeholder="搜尋零件名稱..." oninput="renderParts()" style="flex:1;min-width:150px;">
+        <select class="form-select" id="partSeriesFilter" onchange="renderParts()" style="width:130px;">
+          <option value="">全部系列</option>
+          <option value="BX">BX 系列</option>
+          <option value="UX">UX 系列</option>
+          <option value="CX">CX 系列</option>
+        </select>
+      </div>
+      <div class="parts-grid" id="partsGrid"></div>
+    </div>
+    <div id="parts-add" class="inner-page">
+      <div class="add-part-form">
+        <div class="modal-title">新增零件</div>
+        <div class="form-group">
+          <label class="form-label">① 選擇系列</label>
+          <div class="series-selector">
+            <div class="series-btn active" data-series="BX" onclick="selectSeries('BX')">
+              <div class="series-name">BX</div><div class="series-sub">3 個零件</div>
+            </div>
+            <div class="series-btn" data-series="UX" onclick="selectSeries('UX')">
+              <div class="series-name">UX</div><div class="series-sub">3 個零件</div>
+            </div>
+            <div class="series-btn cx" data-series="CX" onclick="selectSeries('CX')">
+              <div class="series-name">CX</div><div class="series-sub">6 個零件</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">② 零件類型</label>
+          <div id="partTypeSelector"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">零件名稱</label>
+            <input class="form-input" id="newPartName" placeholder="例：Dranzer Spiral">
+          </div>
+          <div class="form-group">
+            <label class="form-label">旋轉方向</label>
+            <select class="form-select" id="newPartSpin">
+              <option value="右旋">右旋</option>
+              <option value="左旋">左旋</option>
+              <option value="雙向">雙向</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">備注 / 特殊效果</label>
+          <input class="form-input" id="newPartNote" placeholder="特殊技能、搭配建議...">
+        </div>
+        <button class="btn btn-gold" onclick="addPart()">➕ 新增零件</button>
+      </div>
+    </div>
+    <div id="parts-stats" class="inner-page">
+      <div class="stats-grid" id="partStatsCards"></div>
+      <div class="divider"></div>
+      <div class="chart-title">各類型數量</div>
+      <div class="bar-chart" id="partTypeChart" style="margin-bottom:28px;"></div>
+      <div class="chart-title">使用次數排行 Top 10</div>
+      <div class="bar-chart" id="partUsageChart"></div>
+    </div>
+  </div>
+
+  <!-- PAGE 4：戰績記錄 -->
+  <div id="page-records" class="page">
+    <div class="section-header">
+      <div class="section-title">戰績記錄</div>
+      <div class="section-sub">個人記帳、多人統計與強度分析</div>
+    </div>
+    <div class="inner-tabs">
+      <button class="inner-tab active" onclick="switchInner('records','personal',this);renderPersonalLog()">👤 個人戰績</button>
+      <button class="inner-tab" onclick="switchInner('records','multi',this);renderMultiLog()">⚔️ 多人戰績</button>
+      <button class="inner-tab" onclick="switchInner('records','analysis',this);renderAnalysis()">📈 強度分析</button>
+    </div>
+    <div id="records-personal" class="inner-page active">
+      <div class="flex" style="margin-bottom:16px;gap:10px;">
+        <button class="btn btn-gold" onclick="openPersonalForm(null)">➕ 新增記錄</button>
+        <button class="btn btn-secondary" onclick="exportPersonalExcel()">⬇️ 匯出 Excel</button>
+        <select class="form-select" id="pLogFilter" onchange="renderPersonalLog()"
+                style="width:110px;padding:8px 12px;margin-left:auto;">
+          <option value="">全部</option>
+          <option value="win">✅ 勝</option>
+          <option value="lose">❌ 負</option>
+        </select>
+      </div>
+      <div class="stats-grid" id="personalStats"></div>
+      <div id="personalLog"></div>
+    </div>
+    <div id="records-multi" class="inner-page">
+      <div class="flex" style="margin-bottom:16px;">
+        <button class="btn btn-secondary" onclick="exportMultiExcel()">⬇️ 匯出 Excel</button>
+      </div>
+      <div class="stats-grid" id="overallStats"></div>
+      <div id="matchLog"></div>
+    </div>
+    <div id="records-analysis" class="inner-page">
+      <div class="inner-tabs" style="margin-bottom:16px;">
+        <button class="inner-tab active" id="anaTab1" onclick="switchAnalysis('config')">🏆 配置勝率</button>
+        <button class="inner-tab" id="anaTab2" onclick="switchAnalysis('parts')">⚙️ 零件勝率</button>
+      </div>
+      <div id="analysisConfig"></div>
+      <div id="analysisParts" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+  <div class="modal" id="partModal">
+    <div class="modal-box">
+      <div class="modal-title" id="partModalTitle">零件詳情</div>
+      <div id="partModalContent"></div>
+      <div class="modal-footer">
+        <button class="btn btn-danger" onclick="deletePart()">刪除</button>
+        <button class="btn btn-secondary" onclick="closeModal('partModal')">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="saveMatchModal">
+    <div class="modal-box" style="max-width:580px;">
+      <div class="modal-title">💾 記錄比賽配置</div>
+      <div style="margin-bottom:16px;">
+        <div class="config-player-label p1-label" id="saveP1Label">選手 A 的配置</div>
+        <div class="config-builder" id="configBuilderP1"></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="config-player-label p2-label" id="saveP2Label">選手 B 的配置</div>
+        <div class="config-builder" id="configBuilderP2"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('saveMatchModal')">取消</button>
+        <button class="btn btn-gold" onclick="confirmSaveMatch()">✅ 儲存記錄</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="personalFormModal">
+    <div class="modal-box" style="max-width:540px;">
+      <div class="modal-title" id="personalFormTitle">➕ 新增個人記錄</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">日期</label>
+          <input type="date" class="form-input" id="pLogDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">對手名稱</label>
+          <input class="form-input" id="pLogOpponent" placeholder="對手暱稱">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">自己分數</label>
+          <input type="number" class="form-input" id="pLogMyScore" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">對手分數</label>
+          <input type="number" class="form-input" id="pLogOppScore" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">結果</label>
+          <select class="form-select" id="pLogResult">
+            <option value="win">✅ 勝</option>
+            <option value="lose">❌ 負</option>
+            <option value="draw">🤝 平</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">自己的系列</label>
+        <div class="config-series-tabs" id="pLogSeriesTabs">
+          <button class="config-series-tab active" onclick="setPLogSeries('BX',this)">BX</button>
+          <button class="config-series-tab" onclick="setPLogSeries('UX',this)">UX</button>
+          <button class="config-series-tab" onclick="setPLogSeries('CX',this)">CX</button>
+          <button class="config-series-tab" onclick="setPLogSeries('',this)">未記錄</button>
+        </div>
+      </div>
+      <div class="form-group" id="pLogConfigArea"></div>
+      <div class="form-group">
+        <label class="form-label">備注</label>
+        <input class="form-input" id="pLogNote" placeholder="比賽場地、心得...">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('personalFormModal')">取消</button>
+        <button class="btn btn-gold" onclick="savePersonalLog()">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
