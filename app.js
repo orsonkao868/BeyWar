@@ -1,6 +1,7 @@
 /**
  * BeyWarrior｜陀螺鬥士輔助系統
  * 製作人：OK
+ * app.js
  */
 
 // ═══════════════════════════════════════
@@ -8,13 +9,29 @@
 // ═══════════════════════════════════════
 const state = {
   parts:        JSON.parse(localStorage.getItem('bey_parts')    || '[]'),
+  cxMods:       JSON.parse(localStorage.getItem('bey_cxmods')   || '[]'),
   matches:      JSON.parse(localStorage.getItem('bey_matches')  || '[]'),
   personalLogs: JSON.parse(localStorage.getItem('bey_personal') || '[]'),
 };
+
 function save() {
   localStorage.setItem('bey_parts',    JSON.stringify(state.parts));
+  localStorage.setItem('bey_cxmods',  JSON.stringify(state.cxMods));
   localStorage.setItem('bey_matches',  JSON.stringify(state.matches));
   localStorage.setItem('bey_personal', JSON.stringify(state.personalLogs));
+}
+
+// 預設零件（首次執行才插入）
+function seedDefaultParts() {
+  if (state.parts.length > 0) return;
+  const defaults = [
+    // 鳳凰飛翼 BX
+    { id: 10001, name:'鳳凰飛翼', cat:'blade', series:'BX', spin:'右旋', note:'BX系列初始戰刃', cxMods:{}, uses:0 },
+    // 蒼龍爆刃 UX
+    { id: 10002, name:'蒼龍爆刃', cat:'blade', series:'UX', spin:'右旋', note:'UX系列強攻戰刃', cxMods:{}, uses:0 },
+  ];
+  state.parts.push(...defaults);
+  save();
 }
 
 // ═══════════════════════════════════════
@@ -34,7 +51,7 @@ function switchInner(group, id, btn) {
   if (btn) btn.classList.add('active');
 }
 function backToSetup() {
-  switchInner('bracket', 'setup', null);
+  switchInner('bracket','setup',null);
   const tabs = document.querySelectorAll('#page-bracket > .inner-tabs > .inner-tab');
   tabs[0].classList.add('active'); tabs[1].classList.remove('active');
 }
@@ -74,14 +91,9 @@ function flashCard(p) {
   card.style.transform  = 'scale(1.04)';
   setTimeout(() => { card.style.transition = 'all .25s'; card.style.transform = ''; }, 120);
 }
-
-// 長按 -1，移動取消
 function touchStart(p, e) {
   touchMoved = false;
-  touchTimer = setTimeout(() => {
-    if (!touchMoved) subScore(p, null);
-    touchTimer = null;
-  }, 550);
+  touchTimer = setTimeout(() => { if (!touchMoved) subScore(p, null); touchTimer = null; }, 550);
 }
 function touchMove() { touchMoved = true; if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; } }
 function touchEnd()  { if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; } }
@@ -99,9 +111,9 @@ function closeVictory() {
   document.getElementById('confettiWrap').innerHTML = '';
 }
 function launchConfetti() {
-  const wrap   = document.getElementById('confettiWrap');
+  const wrap = document.getElementById('confettiWrap');
   wrap.innerHTML = '';
-  const colors = ['#c9a84c','#e8c97a','#8c6e2a','#fff8e0','#f5dfa0','#fffde7','#f0d080'];
+  const colors = ['#c9a84c','#e8c97a','#8c6e2a','#fff8e0','#f5dfa0','#f0d080'];
   const style  = document.createElement('style');
   style.textContent =
     '@keyframes f0{to{transform:translateY(105vh) rotate(360deg);opacity:0}}' +
@@ -123,88 +135,28 @@ function launchConfetti() {
 }
 
 // ═══════════════════════════════════════
-//  SAVE MATCH CONFIG
+//  BRACKET ── 雙向階梯晉級賽
 // ═══════════════════════════════════════
-let matchConfigs = { p1: {}, p2: {} };
 
-function saveMatch() {
-  const p1n = document.getElementById('p1name').value || '選手 A';
-  const p2n = document.getElementById('p2name').value || '選手 B';
-  document.getElementById('saveP1Label').textContent = p1n + ' 的配置';
-  document.getElementById('saveP2Label').textContent = p2n + ' 的配置';
-  matchConfigs = { p1: {}, p2: {} };
-  buildConfigUI('p1'); buildConfigUI('p2');
-  document.getElementById('saveMatchModal').classList.add('show');
-}
-function buildConfigUI(player) {
-  const el  = document.getElementById(player === 'p1' ? 'configBuilderP1' : 'configBuilderP2');
-  const cfg = matchConfigs[player];
-  let html  = '<div class="config-series-tabs">' +
-    ['BX','UX','CX'].map(s =>
-      `<button class="config-series-tab${cfg.series===s?' active':''}" onclick="setConfigSeries('${player}','${s}')">${s}</button>`
-    ).join('') + '</div>';
-  if (!cfg.series) { el.innerHTML = html + '<div class="no-parts-msg">請先選擇系列</div>'; return; }
-  const types = SERIES_TYPES[cfg.series];
-  if (cfg.series === 'CX') {
-    html += '<div class="ptype-group" style="margin-bottom:8px"><div class="ptype-group-label">🌟 鋼鐵戰刃</div><div style="display:flex;flex-direction:column;gap:6px">';
-    types.filter(t => !['ratchet','bit'].includes(t.key)).forEach(t => { html += buildConfigRow(player, t); });
-    html += '</div></div>';
-    types.filter(t => ['ratchet','bit'].includes(t.key)).forEach(t => { html += buildConfigRow(player, t); });
-  } else {
-    types.forEach(t => { html += buildConfigRow(player, t); });
+/*
+  資料結構：
+  bracketState = {
+    players: [],       // 原始名單（已 shuffle）
+    rounds:  [],       // 每輪 = { left:[], right:[] }  各半場比賽
+                       // 每場 = { p1, p2, winner, bye }
+    semiFinals: { left:null, right:null },   // 左右半決賽結果
+    thirdPlace: { p1, p2, winner },          // 季軍賽
+    grandFinal: { p1, p2, winner },          // 冠軍賽
+    ranking:    { first, second, third, fourth },
   }
-  el.innerHTML = html;
-}
-function buildConfigRow(player, typeObj) {
-  const { key, label } = typeObj;
-  const parts = state.parts.filter(p => p.series === matchConfigs[player].series && p.type === key);
-  const sel   = matchConfigs[player][key] || '';
-  if (!parts.length) return `<div class="config-step"><div class="config-step-label">${label}</div><div class="no-parts-msg">尚未新增此零件</div></div>`;
-  return `<div class="config-step"><div class="config-step-label">${label}</div>
-    <select class="form-select" style="padding:8px 12px;font-size:.85rem" onchange="setConfigPart('${player}','${key}',this.value)">
-      <option value="">— 未使用 —</option>
-      ${parts.map(p=>`<option value="${p.id}"${sel==p.id?' selected':''}>${p.name}${p.spin?' ('+p.spin+')':''}</option>`).join('')}
-    </select></div>`;
-}
-function setConfigSeries(player, series) { matchConfigs[player] = { series }; buildConfigUI(player); }
-function setConfigPart(player, key, val) { matchConfigs[player][key] = val; }
+*/
+let bracketState = null;
 
-function confirmSaveMatch() {
-  const p1n    = document.getElementById('p1name').value || '選手 A';
-  const p2n    = document.getElementById('p2name').value || '選手 B';
-  const winner = scores[0] >= scores[1] ? p1n : p2n;
-  const collect = cfg => Object.entries(cfg).filter(([k,v])=>k!=='series'&&v).map(([,v])=>v);
-  const p1parts = collect(matchConfigs.p1), p2parts = collect(matchConfigs.p2);
-  state.matches.unshift({
-    id: Date.now(), date: new Date().toLocaleString('zh-TW'),
-    p1: p1n, p2: p2n, s1: scores[0], s2: scores[1], winner,
-    p1series: matchConfigs.p1.series||'', p2series: matchConfigs.p2.series||'',
-    p1parts, p2parts,
-  });
-  [...p1parts,...p2parts].forEach(pid => {
-    const p = state.parts.find(p=>p.id==pid); if(p) p.uses=(p.uses||0)+1;
-  });
-  save(); closeModal('saveMatchModal'); showToast('✅ 比賽記錄已儲存！','success');
-}
-
-// ═══════════════════════════════════════
-//  BRACKET  ─ 晉級賽（無 BYE 補位）
-//
-//  邏輯：
-//  ・每輪將選手兩兩配對
-//  ・奇數時最後一人直接自動晉級（輪空）
-//  ・剩 2 或 3 人時進入「自由選擇輪」，直接點選晉級者
-//  ・不補空位，有幾人就幾人
-// ═══════════════════════════════════════
-let bracketPlayers  = [];   // 原始名單
-let bracketRounds   = [];   // 已完成的輪次，每輪是 winner 陣列
-let currentRound    = [];   // 本輪對戰清單 [{ p1, p2, winner }]  奇數尾=bye
-let currentWinners  = [];   // 本輪已產生的晉級者
-
+// ── 設定輸入 ──
 function genPlayerInputs() {
   const n = Math.min(1000, Math.max(2, parseInt(document.getElementById('playerCount').value)||2));
   document.getElementById('bracketInfo').textContent =
-    `${n} 位選手，晉級賽將依序進行每輪對決`;
+    `${n} 位選手，左右各 ${Math.ceil(n/2)} / ${Math.floor(n/2)} 人，依序淘汰至決賽`;
   const list     = document.getElementById('playerListEditor');
   const existing = [...list.querySelectorAll('input')].map(i=>i.value);
   list.innerHTML = '';
@@ -216,16 +168,32 @@ function genPlayerInputs() {
 }
 
 function generateBracket() {
-  const n     = Math.min(1000, Math.max(2, parseInt(document.getElementById('playerCount').value)||2));
-  const names = [...document.querySelectorAll('#playerListEditor input')].map((el,i)=>el.value||`選手${i+1}`);
+  const n = Math.min(1000, Math.max(2, parseInt(document.getElementById('playerCount').value)||2));
+  let names = [...document.querySelectorAll('#playerListEditor input')].map((el,i)=>el.value||`選手${i+1}`);
   // shuffle
-  for (let i = names.length-1; i > 0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [names[i],names[j]] = [names[j],names[i]];
+  for (let i = names.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1)); [names[i],names[j]]=[names[j],names[i]];
   }
-  bracketPlayers = names.slice(0, n);
-  bracketRounds  = [];
-  startRound(bracketPlayers);
+  names = names.slice(0, n);
+
+  // 分左右半區
+  const leftPlayers  = names.slice(0, Math.ceil(n/2));
+  const rightPlayers = names.slice(Math.ceil(n/2));
+
+  bracketState = {
+    players: names,
+    leftPlayers, rightPlayers,
+    rounds: [],          // 依輪存放 { left:[matches], right:[matches] }
+    semiFinals: { left:null, right:null },
+    thirdPlace: { p1:null, p2:null, winner:null },
+    grandFinal: { p1:null, p2:null, winner:null },
+    ranking: {},
+  };
+
+  // 建立第一輪
+  buildRound(leftPlayers, 'left', 0);
+  buildRound(rightPlayers, 'right', 0);
+
   renderBracketView();
   switchInner('bracket','draw',null);
   const tabs = document.querySelectorAll('#page-bracket > .inner-tabs > .inner-tab');
@@ -233,377 +201,720 @@ function generateBracket() {
 }
 
 function resetBracket() {
-  bracketPlayers=[]; bracketRounds=[]; currentRound=[]; currentWinners=[];
-  document.getElementById('bracketContainer').innerHTML='';
+  bracketState = null;
+  document.getElementById('bracketScroll').innerHTML = '';
+  document.getElementById('finalsArea').style.display = 'none';
 }
 
-/** 開始新一輪，players 為本輪所有選手 */
-function startRound(players) {
-  currentWinners = [];
-  currentRound   = [];
-  // 兩兩配對
-  for (let i = 0; i < players.length - 1; i += 2) {
-    currentRound.push({ p1: players[i], p2: players[i+1], winner: null });
+/**
+ * 建立某側某輪的對戰清單
+ * @param {string[]} players  本輪選手
+ * @param {'left'|'right'} side
+ * @param {number} roundIdx
+ */
+function buildRound(players, side, roundIdx) {
+  while (bracketState.rounds.length <= roundIdx) {
+    bracketState.rounds.push({ left:[], right:[] });
   }
-  // 奇數：最後一人自動輪空晉級
-  if (players.length % 2 === 1) {
-    const bye = players[players.length - 1];
-    currentRound.push({ p1: bye, p2: null, winner: bye });  // bye 場直接有 winner
-    currentWinners.push(bye);  // 不算在「需點選」的場次裡
+  const matches = [];
+  for (let i = 0; i < players.length; i += 2) {
+    if (i + 1 < players.length) {
+      matches.push({ p1:players[i], p2:players[i+1], winner:null, bye:false });
+    } else {
+      // 奇數最後一人輪空自動晉級
+      matches.push({ p1:players[i], p2:null, winner:players[i], bye:true });
+    }
   }
+  bracketState.rounds[roundIdx][side] = matches;
 }
 
-/** 點選某場勝者 */
-function pickWinner(matchIdx, playerKey) {
-  const match = currentRound[matchIdx];
-  if (!match || match.winner) return;           // 已選過
-  match.winner = match[playerKey];
-  currentWinners.push(match.winner);
+/**
+ * 點選某場勝者
+ * @param {'left'|'right'} side
+ * @param {number} roundIdx
+ * @param {number} matchIdx
+ * @param {'p1'|'p2'} who
+ */
+function pickBracketWinner(side, roundIdx, matchIdx, who) {
+  const match = bracketState.rounds[roundIdx][side][matchIdx];
+  if (!match || match.winner || match.bye) return;
+  match.winner = match[who];
 
-  // 判斷本輪是否全部選完
-  const needed = currentRound.filter(m => m.p2 !== null); // 排除輪空場
-  const done   = needed.every(m => m.winner);
-  if (done) advanceRound();
-  else renderBracketView();
+  // 檢查本輪是否全部決出
+  const round    = bracketState.rounds[roundIdx][side];
+  const allDone  = round.every(m => m.winner);
+  if (allDone) {
+    const winners = round.map(m => m.winner);
+    if (winners.length === 1) {
+      // 這側的最終勝者
+      bracketState.semiFinals[side] = winners[0];
+      checkFinalsReady();
+    } else {
+      // 建立下一輪
+      buildRound(winners, side, roundIdx + 1);
+    }
+  }
+  renderBracketView();
 }
 
-/** 自由選輪（剩 2-3 人）：直接點選進入決賽/冠軍 */
-function pickFree(playerName) {
-  // 確認這個人還沒被選過
-  if (currentWinners.includes(playerName)) {
-    showToast('已選過此選手', 'error'); return;
-  }
-  currentWinners.push(playerName);
-
-  // 若本輪只需選出 1 人（剩3選1）就進下一輪；若是 2 人都點才算完
-  const freePool = currentRound;   // freePool 是陣列裡 p2===null 都是 bye
-  // 剩 2 人：選 1 人即完成（另一人也晉級，但賽制上就是決賽）
-  // 剩 3 人：選 1 人輪空，另外 2 人對打 => 但我們改成 3 人都直接點選排序
-  const total = freePool.length;
-
-  // 自由輪：存在 currentRound 的 freeMode
-  if (currentRound._freeMode) {
-    const pool = currentRound._pool;
-    // 把選的人標為已選
-    const idx = pool.findIndex(p => p === playerName && !pool._picked?.includes(p));
-    if (!pool._picked) pool._picked = [];
-    pool._picked.push(playerName);
-
-    if (pool._picked.length >= pool.length) {
-      // 全部選完
-      bracketRounds.push({ players: bracketPlayers.slice(), matches: JSON.parse(JSON.stringify(currentRound)), winners: [...currentWinners] });
-      const nextPlayers = [...currentWinners];
-      if (nextPlayers.length === 1) {
-        // 冠軍出爐
-        showChampion(nextPlayers[0]);
-        renderBracketView();
-        return;
-      }
-      startRound(nextPlayers);
+/** 檢查雙方是否都產生半決賽勝者 → 開啟決賽 */
+function checkFinalsReady() {
+  const { left, right } = bracketState.semiFinals;
+  if (left && right) {
+    bracketState.grandFinal  = { p1:left, p2:right, winner:null };
+    bracketState.thirdPlace  = { p1:null, p2:null, winner:null };
+    // 季軍賽的選手是各半決賽的落敗者（最後輪次最後一輪的輸家）
+    const lastRoundLeft  = getLastRound('left');
+    const lastRoundRight = getLastRound('right');
+    const loserLeft  = lastRoundLeft  ? getLoserOf(lastRoundLeft[0])  : null;
+    const loserRight = lastRoundRight ? getLoserOf(lastRoundRight[0]) : null;
+    if (loserLeft && loserRight) {
+      bracketState.thirdPlace = { p1:loserLeft, p2:loserRight, winner:null };
     }
     renderBracketView();
-    return;
   }
-
-  renderBracketView();
 }
 
-/** 本輪完成，進入下一輪 */
-function advanceRound() {
-  // 儲存本輪
-  bracketRounds.push({
-    players: [...(bracketRounds.length === 0 ? bracketPlayers : bracketRounds[bracketRounds.length-1].winners)],
-    matches: JSON.parse(JSON.stringify(currentRound)),
-    winners: [...currentWinners],
-  });
+function getLastRound(side) {
+  // 找到最後一輪（半決賽那輪，即只剩2人的輪次）
+  const rounds = bracketState.rounds;
+  for (let i = rounds.length - 1; i >= 0; i--) {
+    const r = rounds[i][side];
+    if (r && r.length > 0) return r;
+  }
+  return null;
+}
 
-  const next = [...currentWinners];
+function getLoserOf(match) {
+  if (!match || !match.winner) return null;
+  if (match.p2 === null) return null;  // bye 不算輸
+  return match.winner === match.p1 ? match.p2 : match.p1;
+}
 
-  if (next.length === 1) { showChampion(next[0]); renderBracketView(); return; }
+/** 點選決賽勝者 */
+function pickFinalWinner(type, who) {
+  const match = bracketState[type];
+  if (!match || match.winner) return;
+  match.winner = match[who];
 
-  // 剩 2 或 3 人 → 自由選擇輪
-  if (next.length <= 3) {
-    enterFreeRound(next);
-  } else {
-    startRound(next);
+  if (type === 'grandFinal') {
+    bracketState.ranking.first  = match.winner;
+    bracketState.ranking.second = match.winner === match.p1 ? match.p2 : match.p1;
+  }
+  if (type === 'thirdPlace') {
+    bracketState.ranking.third  = match.winner;
+    bracketState.ranking.fourth = match.winner === match.p1 ? match.p2 : match.p1;
   }
   renderBracketView();
+
+  // 若冠亞季殿都出爐
+  if (bracketState.ranking.first && bracketState.ranking.third) {
+    setTimeout(() => showFinalRanking(), 300);
+  }
 }
 
-/** 自由選擇輪（剩 2-3 人，手動點選晉級順序） */
-function enterFreeRound(players) {
-  currentWinners = [];
-  currentRound   = [];
-  currentRound._freeMode = true;
-  currentRound._pool     = players;
-  players._picked        = [];
-}
-
-function showChampion(name) {
-  document.getElementById('victoryName').textContent  = name;
-  document.getElementById('victoryScore').textContent = '🏆 晉級賽冠軍！';
+function showFinalRanking() {
+  const r = bracketState.ranking;
+  document.getElementById('victoryName').textContent  = r.first || '—';
+  document.getElementById('victoryScore').textContent = `🥈 ${r.second||'—'}  🥉 ${r.third||'—'}  4️⃣ ${r.fourth||'—'}`;
   document.getElementById('victoryOverlay').classList.add('show');
   launchConfetti();
 }
 
-/** 渲染所有輪次 + 目前輪次 */
+// ── 渲染整個賽表 ──
 function renderBracketView() {
-  const container = document.getElementById('bracketContainer');
-  const wrap      = document.createElement('div');
-  wrap.className  = 'bracket';
+  if (!bracketState) return;
+  const container = document.getElementById('bracketScroll');
+  container.innerHTML = '';
 
-  // 已完成的輪次
-  bracketRounds.forEach((rd, ri) => {
+  const { rounds, semiFinals, grandFinal, thirdPlace, ranking } = bracketState;
+  const maxRounds = Math.max(
+    rounds.filter(r=>r.left.length>0).length,
+    rounds.filter(r=>r.right.length>0).length
+  );
+
+  // 計算單側最大輪數
+  const leftRounds  = rounds.filter(r=>r.left.length>0).length;
+  const rightRounds = rounds.filter(r=>r.right.length>0).length;
+
+  // ── 建立雙向賽表容器 ──
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'display:flex;align-items:flex-start;gap:0;position:relative;';
+
+  // 左半區（由左到右排列，最後一輪靠近中心）
+  const leftHalf = buildHalf('left', rounds, leftRounds);
+  // 中間決賽
+  const center   = buildCenter(grandFinal, thirdPlace, semiFinals, ranking);
+  // 右半區（由右到左排列，最後一輪靠近中心）
+  const rightHalf = buildHalf('right', rounds, rightRounds, true);
+
+  wrapper.appendChild(leftHalf);
+  wrapper.appendChild(center);
+  wrapper.appendChild(rightHalf);
+  container.appendChild(wrapper);
+
+  // 決賽區域（上方摘要）
+  renderFinalsArea(grandFinal, thirdPlace, ranking);
+}
+
+/**
+ * 建立一側的賽表 HTML
+ * @param {'left'|'right'} side
+ * @param {Array} rounds
+ * @param {number} totalRounds
+ * @param {boolean} reverse 右側反向
+ */
+function buildHalf(side, rounds, totalRounds, reverse=false) {
+  const half = document.createElement('div');
+  half.style.cssText = `display:flex;flex-direction:${reverse?'row-reverse':'row'};align-items:flex-start;`;
+
+  const sideRounds = rounds.map(r => r[side]).filter(r=>r&&r.length>0);
+
+  sideRounds.forEach((roundMatches, ri) => {
+    const isLastRound = (ri === sideRounds.length - 1);
     const col = document.createElement('div');
-    col.className = 'bracket-round';
-    const total = bracketPlayers.length;
-    const label = getRoundLabel(ri, total);
-    col.innerHTML = `<div class="round-label">第 ${ri+1} 輪　${label}</div>`;
-    const md = document.createElement('div'); md.className = 'round-matches';
+    col.style.cssText = 'display:flex;flex-direction:column;';
 
-    if (rd._freeMode) {
-      // 自由選擇輪歷史
-      const p = rd._pool || [];
-      const d = document.createElement('div');
-      d.className = 'free-round-banner'; d.textContent = `自由選擇輪：${p.join('、')}`;
-      md.appendChild(d);
-    } else {
-      rd.matches.forEach(m => {
-        const slot = document.createElement('div'); slot.className = 'match-slot';
-        if (m.p2 === null) {
-          slot.innerHTML = `<div class="match-player bye"><span class="seed">輪空</span><span>${m.p1}</span><span class="bye-badge">自動晉級</span></div>`;
-        } else {
-          slot.innerHTML = `
-            <div class="match-player${m.winner===m.p1?' winner':''}"><span class="seed"></span><span>${m.p1}</span></div>
-            <div class="match-divider"></div>
-            <div class="match-player${m.winner===m.p2?' winner':''}"><span class="seed"></span><span>${m.p2}</span></div>`;
-        }
-        md.appendChild(slot);
-      });
+    // 輪次標題
+    const label = document.createElement('div');
+    label.className = 'b-round-label';
+    label.style.cssText = `width:${CSS_W}px;font-size:.66rem;`;
+    const n = bracketState[side==='left'?'leftPlayers':'rightPlayers'].length;
+    label.textContent = getRoundName(ri, n, isLastRound);
+    col.appendChild(label);
+
+    // 計算這輪的 gap（越後面輪次間距越大，形成階梯感）
+    const spacer = getVerticalSpacer(ri, sideRounds.length);
+
+    // 比賽槽
+    const matchesWrap = document.createElement('div');
+    matchesWrap.style.cssText = `display:flex;flex-direction:column;padding:${spacer}px 0;gap:${spacer*2}px;`;
+
+    roundMatches.forEach((match, mi) => {
+      const matchEl = buildMatchSlot(match, side, ri, mi);
+      matchesWrap.appendChild(matchEl);
+    });
+
+    col.appendChild(matchesWrap);
+
+    // 連接線（SVG）
+    if (!isLastRound) {
+      appendConnectorLines(col, roundMatches, sideRounds[ri+1]||[], spacer, side, reverse);
     }
-    col.appendChild(md); wrap.appendChild(col);
+
+    half.appendChild(col);
   });
 
-  // 目前輪次
-  const curIdx = bracketRounds.length;
-  const curCol = document.createElement('div'); curCol.className = 'bracket-round';
+  return half;
+}
 
-  if (currentRound._freeMode) {
-    // 自由選擇模式
-    const pool    = currentRound._pool || [];
-    const picked  = pool._picked || [];
-    const remain  = pool.filter(p => !picked.includes(p));
-    const total   = bracketPlayers.length;
-    curCol.innerHTML = `<div class="round-label" style="color:var(--gold-dk);">第 ${curIdx+1} 輪　自由選擇</div>`;
-    const md = document.createElement('div'); md.className = 'round-matches';
-    const banner = document.createElement('div');
-    banner.className = 'free-round-banner';
-    banner.textContent = `剩 ${remain.length} 人，依序點選晉級順序`;
-    md.appendChild(banner);
+const CSS_W = 150;   // 槽寬
+const CSS_H = 38;    // 槽高
+const CSS_VS = 6;    // vs 間隔
+const CSS_GAP_H = 50; // 水平輪次間距
 
-    pool.forEach(p => {
+function getVerticalSpacer(roundIdx, totalRounds) {
+  // 越靠近決賽間距越大
+  return 8 + roundIdx * 18;
+}
+
+/**
+ * 建立單場比賽的 DOM（兩個槽 + VS 分隔）
+ */
+function buildMatchSlot(match, side, roundIdx, matchIdx) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;position:relative;';
+
+  const makeSlot = (player, key) => {
+    const el = document.createElement('div');
+    el.className = 'b-slot';
+    el.style.cssText = `width:${CSS_W}px;height:${CSS_H}px;`;
+
+    if (!player) {
+      el.classList.add('empty');
+      el.innerHTML = `<span class="name" style="color:var(--text2);font-style:italic;">待定</span>`;
+      return el;
+    }
+
+    const isBye    = match.bye && key === 'p1';
+    const isWinner = match.winner === player;
+    const isLoser  = match.winner && match.winner !== player && !match.bye;
+    const canClick = !match.winner && !match.bye && player;
+
+    if (isBye)    el.classList.add('bye');
+    if (isWinner) el.classList.add('winner');
+    if (isLoser)  el.classList.add('loser');
+    if (canClick) el.classList.add('clickable');
+
+    el.innerHTML = `
+      <span class="name">${player}</span>
+      ${isBye ? '<span class="badge-bye">輪空晉級</span>' : ''}
+    `;
+
+    if (canClick) {
+      el.onclick = () => pickBracketWinner(side, roundIdx, matchIdx, key);
+    }
+    return el;
+  };
+
+  const slot1 = makeSlot(match.p1, 'p1');
+  const vs    = document.createElement('div');
+  vs.className = 'b-vs';
+  vs.innerHTML = '<div class="b-vs-line"></div>';
+  const slot2 = match.p2 !== null ? makeSlot(match.p2, 'p2') :
+    (() => {
       const el = document.createElement('div');
-      if (picked.includes(p)) {
-        const rank = picked.indexOf(p) + 1;
-        el.className = 'match-player winner';
-        el.innerHTML = `<span class="seed">${rank}</span><span>${p}</span>`;
-      } else {
-        el.className = 'match-player free-pick';
-        el.innerHTML = `<span class="seed">?</span><span>${p}</span>`;
-        el.onclick   = () => { pickFreePlayer(p); };
-      }
-      md.appendChild(el);
-    });
-    curCol.appendChild(md);
-  } else if (currentRound.length > 0) {
-    const total = bracketPlayers.length;
-    curCol.innerHTML = `<div class="round-label" style="color:var(--gold-dk);">第 ${curIdx+1} 輪　進行中</div>`;
-    const md = document.createElement('div'); md.className = 'round-matches';
+      el.className = 'b-slot bye';
+      el.style.cssText = `width:${CSS_W}px;height:${CSS_H}px;`;
+      return el;
+    })();
 
-    currentRound.forEach((m, mi) => {
-      const slot = document.createElement('div'); slot.className = 'match-slot';
-      if (m.p2 === null) {
-        // 輪空
-        slot.innerHTML = `<div class="match-player bye"><span class="seed">輪空</span><span>${m.p1}</span><span class="bye-badge">自動晉級</span></div>`;
-      } else if (m.winner) {
-        slot.innerHTML = `
-          <div class="match-player${m.winner===m.p1?' winner':''}"><span class="seed"></span><span>${m.p1}</span></div>
-          <div class="match-divider"></div>
-          <div class="match-player${m.winner===m.p2?' winner':''}"><span class="seed"></span><span>${m.p2}</span></div>`;
-      } else {
-        // 未決，可點選
-        const d1 = document.createElement('div'); d1.className = 'match-player';
-        d1.innerHTML = `<span class="seed"></span><span>${m.p1}</span>`;
-        d1.onclick   = () => pickWinner(mi, 'p1');
-        const div    = document.createElement('div'); div.className = 'match-divider';
-        const d2     = document.createElement('div'); d2.className = 'match-player';
-        d2.innerHTML = `<span class="seed"></span><span>${m.p2}</span>`;
-        d2.onclick   = () => pickWinner(mi, 'p2');
-        slot.appendChild(d1); slot.appendChild(div); slot.appendChild(d2);
-      }
-      md.appendChild(slot);
-    });
-    curCol.appendChild(md);
-  }
-
-  wrap.appendChild(curCol);
-  container.innerHTML = '';
-  container.appendChild(wrap);
+  wrap.appendChild(slot1);
+  wrap.appendChild(vs);
+  wrap.appendChild(slot2);
+  return wrap;
 }
 
-function getRoundLabel(ri, total) {
-  // 計算剩餘人數
-  let n = total;
-  for (let i = 0; i < ri; i++) {
-    n = Math.ceil(n / 2);
-  }
-  const next = Math.ceil(n / 2);
-  if (next === 1) return '決賽';
-  return `${n} → ${next} 人`;
+/**
+ * SVG 連接線（當前輪 → 下一輪）
+ */
+function appendConnectorLines(col, currentMatches, nextMatches, spacer, side, reverse) {
+  // 連接線用 CSS border 模擬（避免 SVG 複雜定位）
+  // 每場比賽右側（左半）或左側（右半）畫出連線到下一輪
+  // 這裡用相對定位的偽元素方式，留給瀏覽器自然渲染
+  // 實際完整 SVG 連線可以在 renderBracketView 後用 JS 計算位置
+  // 此處先用視覺間距呈現階梯，後續可強化
 }
 
-/** 自由選擇輪：點選選手 */
-function pickFreePlayer(name) {
-  const pool   = currentRound._pool;
-  if (!pool._picked) pool._picked = [];
-  if (pool._picked.includes(name)) return;
-  pool._picked.push(name);
-  currentWinners.push(name);
+/**
+ * 建立中間決賽區
+ */
+function buildCenter(grandFinal, thirdPlace, semiFinals, ranking) {
+  const center = document.createElement('div');
+  center.style.cssText = `
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:0 24px;min-width:160px;gap:10px;
+  `;
 
-  if (pool._picked.length >= pool.length) {
-    // 全部選完，存檔並進下一輪
-    bracketRounds.push({
-      _freeMode: true,
-      _pool: pool,
-      winners: [...pool._picked],
-    });
-    const next = [...pool._picked];
-    if (next.length === 1) { showChampion(next[0]); renderBracketView(); return; }
-    if (next.length <= 3) enterFreeRound(next);
-    else startRound(next);
-  }
-  renderBracketView();
-}
+  // 冠軍賽
+  const gfTitle = document.createElement('div');
+  gfTitle.className = 'center-title';
+  gfTitle.innerHTML = '🏆 冠軍賽';
+  center.appendChild(gfTitle);
 
-// ═══════════════════════════════════════
-//  PARTS DB
-// ═══════════════════════════════════════
-const SERIES_TYPES = {
-  BX: [{ key:'blade_bxux',label:'鋼鐵戰刃' },{ key:'ratchet',label:'鎖固輪盤' },{ key:'bit',label:'軸心' }],
-  UX: [{ key:'blade_bxux',label:'鋼鐵戰刃' },{ key:'ratchet',label:'鎖固輪盤' },{ key:'bit',label:'軸心' }],
-  CX: [{ key:'emblem',label:'紋章' },{ key:'main_blade',label:'主要戰刃' },{ key:'sub_blade',label:'輔助戰刃' },{ key:'over_blade',label:'超越戰刃' },{ key:'ratchet',label:'鎖固輪盤' },{ key:'bit',label:'軸心' }],
-};
-const TYPE_LABELS = { blade_bxux:'鋼鐵戰刃',ratchet:'鎖固輪盤',bit:'軸心',emblem:'紋章',main_blade:'主要戰刃',sub_blade:'輔助戰刃',over_blade:'超越戰刃' };
-
-let currentAddSeries = 'BX';
-let currentAddType   = 'blade_bxux';
-let currentPartId    = null;
-
-function selectSeries(s) {
-  currentAddSeries = s;
-  document.querySelectorAll('.series-btn').forEach(b => b.classList.toggle('active', b.dataset.series===s));
-  currentAddType = SERIES_TYPES[s][0].key;
-  renderPartTypeSelector();
-}
-function selectPartType(key) { currentAddType = key; renderPartTypeSelector(); }
-function renderPartTypeSelector() {
-  const el = document.getElementById('partTypeSelector');
-  const types = SERIES_TYPES[currentAddSeries];
-  const isCX  = currentAddSeries === 'CX';
-  if (isCX) {
-    const bl = types.filter(t=>!['ratchet','bit'].includes(t.key));
-    const ot = types.filter(t=> ['ratchet','bit'].includes(t.key));
-    el.innerHTML = `<div class="ptype-flow">
-      <div class="ptype-group"><div class="ptype-group-label">🌟 鋼鐵戰刃（選一種）</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${bl.map(t=>`<button class="ptype-btn cx-only${currentAddType===t.key?' active':''}" onclick="selectPartType('${t.key}')">${t.label}</button>`).join('')}
-        </div></div>
-      <span class="ptype-arrow">→</span>
-      ${ot.map((t,i)=>`<button class="ptype-btn${currentAddType===t.key?' active':''}" onclick="selectPartType('${t.key}')">${t.label}</button>${i<ot.length-1?'<span class="ptype-arrow">→</span>':''}`).join('')}
-    </div>`;
+  if (grandFinal && grandFinal.p1) {
+    const s1 = makeCenterSlot(grandFinal.p1, grandFinal.winner===grandFinal.p1, !grandFinal.winner, () => pickFinalWinner('grandFinal','p1'));
+    const vs = document.createElement('div'); vs.className='center-vs'; vs.textContent='VS';
+    const s2 = makeCenterSlot(grandFinal.p2, grandFinal.winner===grandFinal.p2, !grandFinal.winner, () => pickFinalWinner('grandFinal','p2'));
+    center.appendChild(s1); center.appendChild(vs); center.appendChild(s2);
   } else {
-    el.innerHTML = `<div class="ptype-flow">` +
-      types.map((t,i)=>`<button class="ptype-btn${currentAddType===t.key?' active':''}" onclick="selectPartType('${t.key}')">${t.label}</button>${i<types.length-1?'<span class="ptype-arrow">→</span>':''}`).join('') +
-      `</div>`;
+    ['待左半冠軍','待右半冠軍'].forEach(t=>{
+      const s=document.createElement('div'); s.className='center-slot'; s.style.opacity='.5'; s.textContent=t; center.appendChild(s);
+    });
   }
+
+  center.appendChild(document.createElement('div')).style.height='16px';
+
+  // 季軍賽
+  const tpTitle = document.createElement('div');
+  tpTitle.className = 'center-title';
+  tpTitle.style.fontSize = '.8rem';
+  tpTitle.innerHTML = '🥉 季軍賽';
+  center.appendChild(tpTitle);
+
+  if (thirdPlace && thirdPlace.p1) {
+    const s1 = makeCenterSlot(thirdPlace.p1, thirdPlace.winner===thirdPlace.p1, !thirdPlace.winner, () => pickFinalWinner('thirdPlace','p1'));
+    const vs = document.createElement('div'); vs.className='center-vs'; vs.textContent='VS';
+    const s2 = makeCenterSlot(thirdPlace.p2, thirdPlace.winner===thirdPlace.p2, !thirdPlace.winner, () => pickFinalWinner('thirdPlace','p2'));
+    center.appendChild(s1); center.appendChild(vs); center.appendChild(s2);
+  } else {
+    const p=document.createElement('div'); p.className='center-slot'; p.style.opacity='.5'; p.style.fontSize='.76rem'; p.textContent='待半決賽結束';
+    center.appendChild(p);
+  }
+
+  // 排名
+  if (ranking.first) {
+    const rankWrap = document.createElement('div');
+    rankWrap.style.cssText='margin-top:12px;width:100%;';
+    const medals = [['🥇','first'],['🥈','second'],['🥉','third'],['4️⃣','fourth']];
+    medals.forEach(([medal,key])=>{
+      if(!ranking[key]) return;
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:.82rem;font-weight:700;color:var(--gold-dk);';
+      row.innerHTML=`<span>${medal}</span><span>${ranking[key]}</span>`;
+      rankWrap.appendChild(row);
+    });
+    center.appendChild(rankWrap);
+  }
+
+  return center;
 }
+
+function makeCenterSlot(name, isWinner, clickable, onClick) {
+  const el = document.createElement('div');
+  el.className = 'center-slot' + (isWinner?' winner':'');
+  el.style.cssText = `cursor:${clickable?'pointer':'default'};transition:all .2s;`;
+  if(isWinner) el.style.background='rgba(201,168,76,0.25)';
+  el.textContent = name || '—';
+  if(clickable && name) el.onclick = onClick;
+  return el;
+}
+
+function renderFinalsArea(grandFinal, thirdPlace, ranking) {
+  const area = document.getElementById('finalsArea');
+  // 只有決賽啟動時才顯示
+  if (!grandFinal || !grandFinal.p1) { area.style.display='none'; return; }
+  area.style.display='block';
+
+  const medals = [
+    { medal:'🥇', key:'first',  label:'冠軍' },
+    { medal:'🥈', key:'second', label:'亞軍' },
+    { medal:'🥉', key:'third',  label:'季軍' },
+    { medal:'4️⃣', key:'fourth', label:'殿軍' },
+  ];
+  const allDone = medals.every(m=>ranking[m.key]);
+  if (!allDone) { area.style.display='none'; return; }
+
+  area.innerHTML = `
+    <div class="finals-title">🎖️ 最終排名</div>
+    <div class="ranking-display">
+      ${medals.map(m=>`
+        <div class="rank-card">
+          <div class="rank-medal">${m.medal}</div>
+          <div style="font-size:.7rem;color:var(--text2);">${m.label}</div>
+          <div class="rank-name">${ranking[m.key]||'—'}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function getRoundName(ri, totalPlayers, isLast) {
+  if (isLast && totalPlayers <= 4) return '準決賽';
+  const remaining = Math.ceil(totalPlayers / Math.pow(2, ri));
+  if (remaining <= 2) return '準決賽';
+  return `第 ${ri+1} 輪 (${remaining}→${Math.ceil(remaining/2)})`;
+}
+
+// ═══════════════════════════════════════
+//  PARTS DB ── 零件資料庫
+//  主類型：blade / ratchet / bit
+//  鋼鐵戰刃有 series：BX / UX / CX
+//  CX 另有 cxMods：{ emblem, mainBlade, subBlade, overBlade }（存 cxMod id）
+// ═══════════════════════════════════════
+
+// CX 改造零件類型標籤
+const CX_MOD_LABELS = {
+  emblem:    '聖獸紋章',
+  mainBlade: '主要戰刃',
+  subBlade:  '輔助戰刃',
+  overBlade: '超越戰刃',
+};
+
+const CAT_LABELS = { blade:'鋼鐵戰刃', ratchet:'固鎖輪盤', bit:'軸心' };
+
+// 目前新增表單的選擇狀態
+let addForm = { cat:'blade', series:'BX' };
+
+function initAddForm() {
+  addForm = { cat:'blade', series:'BX' };
+  updateAddFormUI();
+  refreshCxSelects();
+}
+
+function selectCat(cat, btn) {
+  addForm.cat = cat;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateAddFormUI();
+}
+
+function selectSeries(series, btn) {
+  addForm.series = series;
+  document.querySelectorAll('.series-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateAddFormUI();
+}
+
+function updateAddFormUI() {
+  const isBlade = addForm.cat === 'blade';
+  const isCX    = addForm.series === 'CX';
+
+  // 系列選擇只有鋼鐵戰刃才顯示
+  document.getElementById('seriesGroup').style.display = isBlade ? '' : 'none';
+  // CX 改造選單
+  document.getElementById('cxModGroup').style.display  = (isBlade && isCX) ? '' : 'none';
+  // 名稱 label
+  document.getElementById('nameLabel').textContent =
+    isBlade ? (isCX ? '④ 鋼鐵戰刃名稱（母體）' : '③ 鋼鐵戰刃名稱') :
+    (addForm.cat==='ratchet' ? '② 固鎖輪盤名稱' : '② 軸心名稱');
+  // 旋轉方向只有戰刃才顯示
+  document.getElementById('spinGroup').style.display = isBlade ? '' : 'none';
+}
+
+/** 開啟 CX 改造管理 modal */
+function openAddCxMod() {
+  renderCxModList();
+  document.getElementById('cxModModal').classList.add('show');
+}
+
+/** 新增 CX 改造零件 */
+function addCxMod() {
+  const type = document.getElementById('cxModType').value;
+  const name = document.getElementById('cxModName').value.trim();
+  const note = document.getElementById('cxModNote').value.trim();
+  if (!name) { showToast('請輸入改造零件名稱','error'); return; }
+  state.cxMods.push({ id:Date.now(), type, name, note, uses:0 });
+  save();
+  document.getElementById('cxModName').value='';
+  document.getElementById('cxModNote').value='';
+  renderCxModList();
+  showToast(`✅ ${CX_MOD_LABELS[type]}「${name}」已新增！`,'success');
+}
+
+function renderCxModList() {
+  const el = document.getElementById('cxModList');
+  if (!el) return;
+  if (!state.cxMods.length) { el.innerHTML='<div style="color:var(--text2);font-size:.82rem;">尚無改造零件</div>'; return; }
+  el.innerHTML = state.cxMods.map(m=>`
+    <div class="cx-mod-list-item">
+      <div>
+        <span class="cx-type-tag">${CX_MOD_LABELS[m.type]||m.type}</span>
+        <span style="margin-left:8px;font-weight:700;">${m.name}</span>
+        ${m.note?`<span style="color:var(--text2);font-size:.75rem;margin-left:6px;">${m.note}</span>`:''}
+      </div>
+      <button class="btn-icon" onclick="deleteCxMod(${m.id})">🗑</button>
+    </div>`).join('');
+}
+
+function deleteCxMod(id) {
+  state.cxMods = state.cxMods.filter(m=>m.id!==id);
+  save(); renderCxModList(); refreshCxSelects();
+}
+
+/** 更新 CX 改造選單的 option */
+function refreshCxSelects() {
+  ['cxEmblem','cxMainBlade','cxSubBlade','cxOverBlade'].forEach((selectId, idx) => {
+    const typeKey = ['emblem','mainBlade','subBlade','overBlade'][idx];
+    const el = document.getElementById(selectId); if(!el) return;
+    const current = el.value;
+    const mods = state.cxMods.filter(m=>m.type===typeKey);
+    el.innerHTML = `<option value="">— 未使用 —</option>` +
+      mods.map(m=>`<option value="${m.id}"${m.id==current?' selected':''}>${m.name}</option>`).join('');
+  });
+}
+
+/** 新增零件 */
 function addPart() {
   const name = document.getElementById('newPartName').value.trim();
   if (!name) { showToast('請輸入零件名稱','error'); return; }
-  state.parts.push({ id:Date.now(), name, series:currentAddSeries, type:currentAddType, spin:document.getElementById('newPartSpin').value, note:document.getElementById('newPartNote').value, uses:0 });
+
+  const part = {
+    id:     Date.now(),
+    name,
+    cat:    addForm.cat,   // blade / ratchet / bit
+    series: addForm.cat==='blade' ? addForm.series : null,  // 只有 blade 才有系列
+    spin:   addForm.cat==='blade' ? document.getElementById('newPartSpin').value : null,
+    note:   document.getElementById('newPartNote').value,
+    cxMods: {},
+    uses:   0,
+  };
+
+  // CX 改造配件
+  if (addForm.cat==='blade' && addForm.series==='CX') {
+    part.cxMods = {
+      emblem:    document.getElementById('cxEmblem').value    || null,
+      mainBlade: document.getElementById('cxMainBlade').value || null,
+      subBlade:  document.getElementById('cxSubBlade').value  || null,
+      overBlade: document.getElementById('cxOverBlade').value || null,
+    };
+  }
+
+  state.parts.push(part);
   save();
-  showToast(`✅ ${TYPE_LABELS[currentAddType]}「${name}」已新增！`,'success');
+  showToast(`✅ ${CAT_LABELS[addForm.cat]}「${name}」已新增！`,'success');
   document.getElementById('newPartName').value='';
   document.getElementById('newPartNote').value='';
+  refreshCxSelects();
+  renderParts();
 }
+
+/** 渲染零件列表 */
 function renderParts() {
   const search  = (document.getElementById('partSearch')?.value||'').toLowerCase();
+  const catF    = document.getElementById('partCatFilter')?.value||'';
   const seriesF = document.getElementById('partSeriesFilter')?.value||'';
-  const filtered = state.parts.filter(p=>(!search||p.name.toLowerCase().includes(search))&&(!seriesF||p.series===seriesF));
+
+  const filtered = state.parts.filter(p=>
+    (!search  || p.name.toLowerCase().includes(search)) &&
+    (!catF    || p.cat===catF) &&
+    (!seriesF || p.series===seriesF)
+  );
+
   const grid = document.getElementById('partsGrid'); if(!grid) return;
-  if (!filtered.length) { grid.innerHTML='<div class="empty-state"><div class="empty-icon">📦</div><div>尚無零件</div></div>'; return; }
-  const grouped={};
-  filtered.forEach(p=>{(grouped[p.series]=grouped[p.series]||[]).push(p);});
-  let html='';
-  ['BX','UX','CX'].forEach(s=>{
-    if(!grouped[s]) return;
-    html+=`<div style="grid-column:1/-1;margin:8px 0 4px;"><span class="part-type-badge badge-series-${s.toLowerCase()}" style="font-size:.85rem;padding:4px 14px;">${s} 系列</span></div>`;
-    grouped[s].forEach(p=>{
-      html+=`<div class="part-card" onclick="showPart(${p.id})">
-        <div class="part-card-header"><span class="part-type-badge badge-${p.type}">${TYPE_LABELS[p.type]||p.type}</span><div class="part-uses-badge">×${p.uses||0}</div></div>
+  if(!filtered.length) {
+    grid.innerHTML='<div class="empty-state"><div class="empty-icon">📦</div><div>尚無零件</div></div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(p => {
+    // CX 改造資訊
+    let cxInfo = '';
+    if (p.cat==='blade' && p.series==='CX' && p.cxMods) {
+      const mods = Object.entries(p.cxMods)
+        .filter(([,v])=>v)
+        .map(([k,id])=>{ const m=state.cxMods.find(m=>m.id==id); return m?`<span>${CX_MOD_LABELS[k]}：${m.name}</span>`:''; })
+        .filter(Boolean);
+      if(mods.length) cxInfo=`<div style="font-size:.72rem;color:var(--text2);margin-top:4px;">${mods.join(' / ')}</div>`;
+    }
+    return `<div class="part-card" onclick="showPart(${p.id})">
+      <div class="part-card-top">
         <div class="part-name">${p.name}</div>
-        ${p.spin||p.note?`<div style="font-size:.78rem;color:var(--text2);margin-top:4px;">${p.spin||''}${p.note?' · '+p.note:''}</div>`:''}
-      </div>`;
-    });
-  });
-  grid.innerHTML=html;
+        <div class="part-uses">×${p.uses||0}</div>
+      </div>
+      <div class="part-tags">
+        <span class="badge badge-${p.cat}">${CAT_LABELS[p.cat]||p.cat}</span>
+        ${p.series?`<span class="badge badge-${p.series.toLowerCase()}">${p.series}</span>`:''}
+        ${p.spin?`<span class="badge" style="background:rgba(120,110,90,0.1);color:var(--text2);border:1px solid var(--border);">${p.spin}</span>`:''}
+      </div>
+      ${cxInfo}
+      ${p.note?`<div style="font-size:.72rem;color:var(--text2);margin-top:4px;">${p.note}</div>`:''}
+    </div>`;
+  }).join('');
 }
+
+let currentPartId = null;
 function showPart(id) {
-  currentPartId=id;
-  const p=state.parts.find(p=>p.id===id); if(!p) return;
-  document.getElementById('partModalTitle').textContent=p.name;
+  currentPartId = id;
+  const p = state.parts.find(p=>p.id===id); if(!p) return;
+  document.getElementById('partModalTitle').textContent = p.name;
+
+  let cxSection = '';
+  if (p.cat==='blade' && p.series==='CX' && p.cxMods) {
+    const rows = Object.entries(p.cxMods).map(([k,id])=>{
+      if(!id) return `<div class="part-detail-item"><div class="form-label">${CX_MOD_LABELS[k]}</div><div style="color:var(--text2);">未使用</div></div>`;
+      const m=state.cxMods.find(m=>m.id==id);
+      return `<div class="part-detail-item"><div class="form-label">${CX_MOD_LABELS[k]}</div><div>${m?m.name:'—'}</div></div>`;
+    });
+    cxSection=`<div style="margin-top:12px;font-size:.76rem;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">CX 改造配件</div>
+      <div class="part-detail-grid">${rows.join('')}</div>`;
+  }
+
   document.getElementById('partModalContent').innerHTML=`
-    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
-      <span class="part-type-badge badge-series-${p.series.toLowerCase()}" style="padding:4px 12px;">${p.series} 系列</span>
-      <span class="part-type-badge badge-${p.type}">${TYPE_LABELS[p.type]||p.type}</span>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+      <span class="badge badge-${p.cat}">${CAT_LABELS[p.cat]||p.cat}</span>
+      ${p.series?`<span class="badge badge-${p.series.toLowerCase()}">${p.series}</span>`:''}
+      ${p.spin?`<span class="badge" style="background:rgba(120,110,90,0.1);color:var(--text2);border:1px solid var(--border);">${p.spin}</span>`:''}
     </div>
     <div class="part-detail-grid">
-      <div class="part-detail-item"><div class="form-label">旋轉方向</div><div>${p.spin||'—'}</div></div>
-      <div class="part-detail-item"><div class="form-label">使用次數</div><div style="font-family:Rajdhani;font-size:1.6rem;font-weight:700;color:var(--gold-dk);">${p.uses||0}</div></div>
+      <div class="part-detail-item"><div class="form-label">使用次數</div>
+        <div style="font-family:Rajdhani;font-size:1.5rem;font-weight:700;color:var(--gold-dk);">${p.uses||0}</div>
+      </div>
+      ${p.note?`<div class="part-detail-item"><div class="form-label">備注</div><div style="font-size:.85rem;">${p.note}</div></div>`:''}
     </div>
-    ${p.note?`<div class="part-detail-item" style="margin-top:8px;"><div class="form-label">備注</div><div>${p.note}</div></div>`:''}`;
+    ${cxSection}`;
   document.getElementById('partModal').classList.add('show');
 }
 function deletePart() {
   state.parts=state.parts.filter(p=>p.id!==currentPartId);
   save(); renderParts(); closeModal('partModal'); showToast('零件已刪除','error');
 }
+
 function renderPartStats() {
-  const bx=state.parts.filter(p=>p.series==='BX').length;
-  const ux=state.parts.filter(p=>p.series==='UX').length;
-  const cx=state.parts.filter(p=>p.series==='CX').length;
-  const tu=state.parts.reduce((a,p)=>a+(p.uses||0),0);
+  const blades  = state.parts.filter(p=>p.cat==='blade').length;
+  const ratchets= state.parts.filter(p=>p.cat==='ratchet').length;
+  const bits    = state.parts.filter(p=>p.cat==='bit').length;
+  const cxmods  = state.cxMods.length;
+  const tu      = state.parts.reduce((a,p)=>a+(p.uses||0),0);
   document.getElementById('partStatsCards').innerHTML=`
     <div class="stat-card"><div class="stat-card-val">${state.parts.length}</div><div class="stat-card-label">零件總數</div></div>
-    <div class="stat-card"><div class="stat-card-val" style="color:var(--blue);">${bx}</div><div class="stat-card-label">BX</div></div>
-    <div class="stat-card"><div class="stat-card-val" style="color:var(--green);">${ux}</div><div class="stat-card-label">UX</div></div>
-    <div class="stat-card"><div class="stat-card-val" style="color:var(--gold-dk);">${cx}</div><div class="stat-card-label">CX</div></div>
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--gold-dk);">${blades}</div><div class="stat-card-label">鋼鐵戰刃</div></div>
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--blue);">${ratchets}</div><div class="stat-card-label">固鎖輪盤</div></div>
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--green);">${bits}</div><div class="stat-card-label">軸心</div></div>
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--accent);">${cxmods}</div><div class="stat-card-label">CX改造零件</div></div>
     <div class="stat-card"><div class="stat-card-val">${tu}</div><div class="stat-card-label">總使用次數</div></div>`;
-  const tc={};
-  state.parts.forEach(p=>{tc[p.type]=(tc[p.type]||0)+1;});
+
+  const tc={blade:blades,ratchet:ratchets,bit:bits};
   const maxT=Math.max(1,...Object.values(tc));
-  document.getElementById('partTypeChart').innerHTML=Object.entries(tc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
-    <div class="bar-row"><div class="bar-label">${TYPE_LABELS[k]||k}</div><div class="bar-track"><div class="bar-fill" style="width:${v/maxT*100}%"></div></div><div class="bar-val">${v}</div></div>`).join('')||'<div style="color:var(--text2)">暫無數據</div>';
+  document.getElementById('partTypeChart').innerHTML=Object.entries(tc).map(([k,v])=>`
+    <div class="bar-row"><div class="bar-label">${CAT_LABELS[k]}</div><div class="bar-track"><div class="bar-fill" style="width:${v/maxT*100}%"></div></div><div class="bar-val">${v}</div></div>`).join('');
+
   const sorted=[...state.parts].sort((a,b)=>(b.uses||0)-(a.uses||0)).slice(0,10);
   const maxU=Math.max(1,sorted[0]?.uses||0);
   document.getElementById('partUsageChart').innerHTML=sorted.length?sorted.map(p=>`
-    <div class="bar-row"><div class="bar-label">${p.name} <span style="font-size:.65rem;color:var(--text2);">${p.series}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(p.uses||0)/maxU*100}%"></div></div><div class="bar-val">${p.uses||0}</div></div>`).join(''):'<div style="color:var(--text2)">暫無數據</div>';
+    <div class="bar-row"><div class="bar-label">${p.name}</div><div class="bar-track"><div class="bar-fill" style="width:${(p.uses||0)/maxU*100}%"></div></div><div class="bar-val">${p.uses||0}</div></div>`).join(''):'<div style="color:var(--text2);">暫無數據</div>';
+}
+
+// ═══════════════════════════════════════
+//  SAVE MATCH
+// ═══════════════════════════════════════
+let matchConfigs = { p1:{}, p2:{} };
+
+function saveMatch() {
+  const p1n = document.getElementById('p1name').value||'選手 A';
+  const p2n = document.getElementById('p2name').value||'選手 B';
+  document.getElementById('saveP1Label').textContent = p1n;
+  document.getElementById('saveP2Label').textContent = p2n;
+  matchConfigs = { p1:{}, p2:{} };
+  buildMatchConfigUI('p1'); buildMatchConfigUI('p2');
+  document.getElementById('saveMatchModal').classList.add('show');
+}
+
+function buildMatchConfigUI(player) {
+  const el  = document.getElementById(player==='p1'?'configBuilderP1':'configBuilderP2');
+  const cfg = matchConfigs[player];
+  let html = '';
+
+  // 鋼鐵戰刃選擇
+  const blades = state.parts.filter(p=>p.cat==='blade');
+  html += `<div class="config-step"><div class="config-step-label">鋼鐵戰刃</div>
+    <select class="form-select" style="padding:7px 12px;font-size:.82rem;" onchange="setMatchPart('${player}','blade',this.value)">
+      <option value="">— 未使用 —</option>
+      ${blades.map(p=>`<option value="${p.id}">${p.name} (${p.series||'—'})</option>`).join('')}
+    </select></div>`;
+
+  // 固鎖輪盤
+  const ratchets = state.parts.filter(p=>p.cat==='ratchet');
+  html += `<div class="config-step"><div class="config-step-label">固鎖輪盤</div>
+    <select class="form-select" style="padding:7px 12px;font-size:.82rem;" onchange="setMatchPart('${player}','ratchet',this.value)">
+      <option value="">— 未使用 —</option>
+      ${ratchets.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+    </select></div>`;
+
+  // 軸心
+  const bits = state.parts.filter(p=>p.cat==='bit');
+  html += `<div class="config-step"><div class="config-step-label">軸心</div>
+    <select class="form-select" style="padding:7px 12px;font-size:.82rem;" onchange="setMatchPart('${player}','bit',this.value)">
+      <option value="">— 未使用 —</option>
+      ${bits.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+    </select></div>`;
+
+  el.innerHTML = html;
+}
+
+function setMatchPart(player, cat, val) { matchConfigs[player][cat] = val; }
+
+function confirmSaveMatch() {
+  const p1n    = document.getElementById('p1name').value||'選手 A';
+  const p2n    = document.getElementById('p2name').value||'選手 B';
+  const winner = scores[0]>=scores[1] ? p1n : p2n;
+  const collectIds = cfg => Object.values(cfg).filter(Boolean);
+
+  state.matches.unshift({
+    id:Date.now(), date:new Date().toLocaleString('zh-TW'),
+    p1:p1n, p2:p2n, s1:scores[0], s2:scores[1], winner,
+    p1Config:{...matchConfigs.p1}, p2Config:{...matchConfigs.p2},
+    p1Parts:collectIds(matchConfigs.p1), p2Parts:collectIds(matchConfigs.p2),
+  });
+  // 更新使用次數
+  [...collectIds(matchConfigs.p1),...collectIds(matchConfigs.p2)].forEach(pid=>{
+    const p=state.parts.find(p=>p.id==pid); if(p) p.uses=(p.uses||0)+1;
+  });
+  save(); closeModal('saveMatchModal'); showToast('✅ 比賽記錄已儲存！','success');
 }
 
 // ═══════════════════════════════════════
 //  PERSONAL LOG
 // ═══════════════════════════════════════
-let editingPersonalId=null, pLogSeries='BX', pLogConfig={};
+let editingPersonalId=null, pLogConfig={};
 
 function openPersonalForm(id) {
   editingPersonalId=id;
@@ -615,39 +926,25 @@ function openPersonalForm(id) {
   document.getElementById('pLogOppScore').value=entry?.oppScore??0;
   document.getElementById('pLogResult').value=entry?.result||'win';
   document.getElementById('pLogNote').value=entry?.note||'';
-  pLogSeries=entry?.series||'BX'; pLogConfig=entry?{...entry.config}:{};
-  document.querySelectorAll('#pLogSeriesTabs .config-series-tab').forEach(t=>{
-    t.classList.toggle('active',t.textContent.trim()===(pLogSeries||'未記錄'));
-  });
-  renderPLogConfigArea();
+  pLogConfig = entry?.config ? {...entry.config} : {};
+  renderPLogConfig();
   document.getElementById('personalFormModal').classList.add('show');
 }
-function setPLogSeries(s,btn) {
-  pLogSeries=s; pLogConfig={};
-  document.querySelectorAll('#pLogSeriesTabs .config-series-tab').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active'); renderPLogConfigArea();
-}
-function renderPLogConfigArea() {
+
+function renderPLogConfig() {
   const el=document.getElementById('pLogConfigArea');
-  if(!pLogSeries){el.innerHTML='';return;}
-  const types=SERIES_TYPES[pLogSeries], isCX=pLogSeries==='CX';
-  const row=t=>{
-    const parts=state.parts.filter(p=>p.series===pLogSeries&&p.type===t.key);
-    const sel=pLogConfig[t.key]||'';
-    if(!parts.length) return `<div class="config-step"><div class="config-step-label">${t.label}</div><div class="no-parts-msg">尚未新增此零件</div></div>`;
-    return `<div class="config-step"><div class="config-step-label">${t.label}</div>
-      <select class="form-select" style="padding:8px 12px;font-size:.85rem;" onchange="pLogConfig['${t.key}']=this.value">
+  const makeSel=(cat,label)=>{
+    const parts=state.parts.filter(p=>p.cat===cat);
+    if(!parts.length) return `<div class="config-step"><div class="config-step-label">${label}</div><div class="no-parts-msg">尚無零件</div></div>`;
+    return `<div class="config-step"><div class="config-step-label">${label}</div>
+      <select class="form-select" style="padding:7px 12px;font-size:.82rem;" onchange="pLogConfig['${cat}']=this.value">
         <option value="">— 未使用 —</option>
-        ${parts.map(p=>`<option value="${p.id}"${sel==p.id?' selected':''}>${p.name}</option>`).join('')}
+        ${parts.map(p=>`<option value="${p.id}"${pLogConfig[cat]==p.id?' selected':''}>${p.name}${p.series?' ('+p.series+')':''}</option>`).join('')}
       </select></div>`;
   };
-  let html='<label class="form-label">自己的零件配置</label>';
-  if(isCX){
-    html+=`<div class="ptype-group" style="margin-bottom:8px;"><div class="ptype-group-label">🌟 鋼鐵戰刃</div>${types.filter(t=>!['ratchet','bit'].includes(t.key)).map(row).join('')}</div>`;
-    types.filter(t=>['ratchet','bit'].includes(t.key)).forEach(t=>{html+=row(t);});
-  } else { types.forEach(t=>{html+=row(t);}); }
-  el.innerHTML=html;
+  el.innerHTML=makeSel('blade','鋼鐵戰刃')+makeSel('ratchet','固鎖輪盤')+makeSel('bit','軸心');
 }
+
 function savePersonalLog() {
   const entry={
     id:editingPersonalId||Date.now(),
@@ -657,12 +954,10 @@ function savePersonalLog() {
     oppScore:parseInt(document.getElementById('pLogOppScore').value)||0,
     result:document.getElementById('pLogResult').value,
     note:document.getElementById('pLogNote').value.trim(),
-    series:pLogSeries, config:{...pLogConfig},
+    config:{...pLogConfig},
   };
-  if(editingPersonalId){
-    const i=state.personalLogs.findIndex(l=>l.id===editingPersonalId);
-    if(i!==-1) state.personalLogs[i]=entry;
-  } else { state.personalLogs.unshift(entry); }
+  if(editingPersonalId){const i=state.personalLogs.findIndex(l=>l.id===editingPersonalId);if(i!==-1)state.personalLogs[i]=entry;}
+  else state.personalLogs.unshift(entry);
   save(); closeModal('personalFormModal'); renderPersonalLog(); showToast('✅ 記錄已儲存！','success');
 }
 function deletePersonalLog(id) {
@@ -685,10 +980,14 @@ function renderPersonalLog() {
     <div class="stat-card"><div class="stat-card-val" style="color:${wr>=60?'var(--green)':wr>=40?'var(--gold-dk)':'var(--accent)'};">${wr}%</div><div class="stat-card-label">勝率</div></div>`;
   const el=document.getElementById('personalLog'); if(!el) return;
   if(!logs.length){el.innerHTML=`<div class="empty-state"><div class="empty-icon">📒</div><div>${total?'無符合記錄':'尚無個人戰績'}</div></div>`;return;}
-  const cfgText=(series,config)=>{
-    if(!series) return '';
-    return `<div class="plog-config"><strong>${series} 系列</strong>　`+
-      (SERIES_TYPES[series]||[]).map(t=>{const pid=config?.[t.key];const p=pid?state.parts.find(p=>p.id==pid):null;return `<span><strong>${t.label}：</strong>${p?p.name:'—'}</span>`;}).join('　')+'</div>';
+  const cfgText=config=>{
+    if(!config) return '';
+    const items=['blade','ratchet','bit'].map(cat=>{
+      const pid=config[cat]; if(!pid) return null;
+      const p=state.parts.find(p=>p.id==pid); if(!p) return null;
+      return `<span><strong>${CAT_LABELS[cat]}：</strong>${p.name}</span>`;
+    }).filter(Boolean);
+    return items.length?`<div class="plog-config">${items.join('　')}</div>`:'';
   };
   const rl={win:'✅ 勝',lose:'❌ 負',draw:'🤝 平'};
   el.innerHTML='<div class="plog-list">'+logs.map(l=>`
@@ -698,7 +997,7 @@ function renderPersonalLog() {
         <div class="plog-opponent">vs　${l.opponent}</div>
         <div class="plog-score-line"><span>${l.myScore}</span> : <span>${l.oppScore}</span></div>
         <div class="plog-date">📅 ${l.date}</div>
-        ${cfgText(l.series,l.config)}
+        ${cfgText(l.config)}
         ${l.note?`<div class="plog-note">💬 ${l.note}</div>`:''}
       </div>
       <div class="plog-actions">
@@ -723,12 +1022,12 @@ function renderMultiLog() {
   const le=document.getElementById('matchLog'); if(!le) return;
   if(!state.matches.length){le.innerHTML='<div class="empty-state"><div class="empty-icon">⚔️</div><div>尚無多人記錄</div></div>';return;}
   const pn=id=>{const p=state.parts.find(p=>p.id==id);return p?p.name:'—';};
-  const ct=(parts,series)=>{const n=(parts||[]).map(pn).filter(Boolean).join(' / ');return `${series||''}${n?' · '+n:''}`||'—';};
+  const cfgStr=cfg=>{if(!cfg) return '—';return ['blade','ratchet','bit'].map(k=>cfg[k]?pn(cfg[k]):'').filter(Boolean).join(' / ')||'—';};
   le.innerHTML=state.matches.map(m=>`
     <div class="log-entry">
-      <div><div class="log-player">${m.p1}${m.winner===m.p1?' <span class="log-winner-tag">✔ 勝</span>':''}</div><div class="log-parts">${ct(m.p1parts,m.p1series)}</div></div>
+      <div><div class="log-player">${m.p1}${m.winner===m.p1?' <span class="log-winner-tag">✔ 勝</span>':''}</div><div class="log-parts">${cfgStr(m.p1Config)}</div></div>
       <div><div class="log-score">${m.s1} : ${m.s2}</div><div class="log-date">${m.date}</div></div>
-      <div style="text-align:right;"><div class="log-player">${m.p2}${m.winner===m.p2?' <span class="log-winner-tag">✔ 勝</span>':''}</div><div class="log-parts" style="text-align:right;">${ct(m.p2parts,m.p2series)}</div></div>
+      <div style="text-align:right;"><div class="log-player">${m.p2}${m.winner===m.p2?' <span class="log-winner-tag">✔ 勝</span>':''}</div><div class="log-parts" style="text-align:right;">${cfgStr(m.p2Config)}</div></div>
     </div>`).join('');
 }
 
@@ -748,31 +1047,21 @@ function renderAnalysis() { renderConfigAnalysis(); renderPartsAnalysis(); }
 
 function renderConfigAnalysis() {
   const el=document.getElementById('analysisConfig'); if(!el) return;
-  const cfgKey=(parts,series)=>{
-    if(!series||!parts?.length) return null;
-    const n=parts.map(id=>state.parts.find(p=>p.id==id)?.name||'').filter(Boolean);
-    return `[${series}] ${n.join(' / ')}`;
+  const cfgKey=cfg=>{
+    if(!cfg) return null;
+    const parts=['blade','ratchet','bit'].map(k=>{const p=state.parts.find(p=>p.id==cfg[k]);return p?p.name:'';}).filter(Boolean);
+    return parts.length?parts.join(' / '):null;
   };
   const cs={};
-  state.matches.forEach(m=>{
-    [[m.p1,m.p1parts,m.p1series,m.winner===m.p1],[m.p2,m.p2parts,m.p2series,m.winner===m.p2]].forEach(([,parts,series,won])=>{
-      const k=cfgKey(parts,series); if(!k) return;
-      if(!cs[k]) cs[k]={key:k,wins:0,total:0,series};
-      cs[k].total++; if(won) cs[k].wins++;
-    });
-  });
-  state.personalLogs.forEach(l=>{
-    const n=(SERIES_TYPES[l.series]||[]).map(t=>{const pid=l.config?.[t.key];return pid?state.parts.find(p=>p.id==pid)?.name:'';}).filter(Boolean);
-    const k=n.length?`[${l.series}] ${n.join(' / ')}`:null; if(!k) return;
-    if(!cs[k]) cs[k]={key:k,wins:0,total:0,series:l.series};
-    cs[k].total++; if(l.result==='win') cs[k].wins++;
-  });
+  const add=(cfg,won)=>{const k=cfgKey(cfg);if(!k)return;if(!cs[k])cs[k]={key:k,wins:0,total:0};cs[k].total++;if(won)cs[k].wins++;};
+  state.matches.forEach(m=>{add(m.p1Config,m.winner===m.p1);add(m.p2Config,m.winner===m.p2);});
+  state.personalLogs.forEach(l=>{add(l.config,l.result==='win');});
   const rows=Object.values(cs).sort((a,b)=>(b.wins/b.total)-(a.wins/a.total)||b.total-a.total);
-  if(!rows.length){el.innerHTML='<div class="analysis-empty">📊 比賽場次不足，尚無法分析</div>';return;}
+  if(!rows.length){el.innerHTML='<div class="analysis-empty">📊 比賽場次不足</div>';return;}
   el.innerHTML=`<div class="analysis-section-title">配置勝率排行</div>
     <table class="analysis-table"><thead><tr><th>#</th><th>配置</th><th>場次</th><th>勝場</th><th>勝率</th></tr></thead>
     <tbody>${rows.map((r,i)=>{const wr=Math.round(r.wins/r.total*100);const cls=wr>=60?'win-rate-high':wr>=40?'win-rate-mid':'win-rate-low';
-      return `<tr><td style="color:var(--text2);">${i+1}</td><td><span class="part-type-badge badge-series-${(r.series||'').toLowerCase()}" style="margin-right:6px;">${r.series||'—'}</span>${r.key.replace(/^\[.*?\]\s*/,'')}</td><td>${r.total}</td><td style="color:var(--green);">${r.wins}</td>
+      return `<tr><td style="color:var(--text2);">${i+1}</td><td>${r.key}</td><td>${r.total}</td><td style="color:var(--green);">${r.wins}</td>
       <td><div class="win-rate-val ${cls}">${wr}%</div><div class="win-rate-bar"><div class="win-rate-fill" style="width:${wr}%"></div></div></td></tr>`;}).join('')}
     </tbody></table>`;
 }
@@ -780,20 +1069,19 @@ function renderConfigAnalysis() {
 function renderPartsAnalysis() {
   const el=document.getElementById('analysisParts'); if(!el) return;
   const ps={};
-  const track=(pid,won)=>{const p=state.parts.find(p=>p.id==pid);if(!p) return;if(!ps[p.id])ps[p.id]={id:p.id,name:p.name,type:p.type,series:p.series,wins:0,total:0};ps[p.id].total++;if(won)ps[p.id].wins++;};
-  state.matches.forEach(m=>{m.p1parts?.forEach(pid=>track(pid,m.winner===m.p1));m.p2parts?.forEach(pid=>track(pid,m.winner===m.p2));});
-  state.personalLogs.forEach(l=>{(SERIES_TYPES[l.series]||[]).forEach(t=>{const pid=l.config?.[t.key];if(pid)track(pid,l.result==='win');});});
+  const track=(pid,won)=>{const p=state.parts.find(p=>p.id==pid);if(!p)return;if(!ps[p.id])ps[p.id]={id:p.id,name:p.name,cat:p.cat,wins:0,total:0};ps[p.id].total++;if(won)ps[p.id].wins++;};
+  state.matches.forEach(m=>{m.p1Parts?.forEach(pid=>track(pid,m.winner===m.p1));m.p2Parts?.forEach(pid=>track(pid,m.winner===m.p2));});
+  state.personalLogs.forEach(l=>{['blade','ratchet','bit'].forEach(k=>{if(l.config?.[k])track(l.config[k],l.result==='win');});});
   const rows=Object.values(ps).sort((a,b)=>(b.wins/b.total)-(a.wins/a.total)||b.total-a.total);
   if(!rows.length){el.innerHTML='<div class="analysis-empty">⚙️ 尚無零件使用記錄</div>';return;}
-  const byType={};
-  rows.forEach(r=>{(byType[r.type]=byType[r.type]||[]).push(r);});
+  const byType={};rows.forEach(r=>{(byType[r.cat]=byType[r.cat]||[]).push(r);});
   let html='';
-  ['blade_bxux','emblem','main_blade','sub_blade','over_blade','ratchet','bit'].forEach(type=>{
-    const g=byType[type]; if(!g) return;
-    html+=`<div class="analysis-section-title">${TYPE_LABELS[type]||type}</div>
-      <table class="analysis-table"><thead><tr><th>#</th><th>零件</th><th>系列</th><th>場次</th><th>勝場</th><th>勝率</th></tr></thead>
+  ['blade','ratchet','bit'].forEach(cat=>{
+    const g=byType[cat];if(!g)return;
+    html+=`<div class="analysis-section-title">${CAT_LABELS[cat]}</div>
+      <table class="analysis-table"><thead><tr><th>#</th><th>零件</th><th>場次</th><th>勝場</th><th>勝率</th></tr></thead>
       <tbody>${g.map((r,i)=>{const wr=Math.round(r.wins/r.total*100);const cls=wr>=60?'win-rate-high':wr>=40?'win-rate-mid':'win-rate-low';
-        return `<tr><td style="color:var(--text2);">${i+1}</td><td><strong>${r.name}</strong></td><td><span class="part-type-badge badge-series-${(r.series||'').toLowerCase()}">${r.series||'—'}</span></td><td>${r.total}</td><td style="color:var(--green);">${r.wins}</td>
+        return `<tr><td style="color:var(--text2);">${i+1}</td><td><strong>${r.name}</strong></td><td>${r.total}</td><td style="color:var(--green);">${r.wins}</td>
         <td><div class="win-rate-val ${cls}">${wr}%</div><div class="win-rate-bar"><div class="win-rate-fill" style="width:${wr}%"></div></div></td></tr>`;}).join('')}
       </tbody></table>`;
   });
@@ -806,21 +1094,20 @@ function renderPartsAnalysis() {
 function exportPersonalExcel() {
   if(!state.personalLogs.length){showToast('尚無個人記錄','error');return;}
   const rl={win:'勝',lose:'負',draw:'平'};
-  const headers=['日期','對手','結果','自己分數','對手分數','系列','鋼鐵戰刃/紋章','鎖固輪盤','軸心','備注'];
-  const rows=state.personalLogs.map(l=>{
-    const cfg=l.config||{};
-    const blade=['blade_bxux','emblem','main_blade'].map(k=>{const pid=cfg[k];return pid?state.parts.find(p=>p.id==pid)?.name:'';}).filter(Boolean).join('/');
-    const ratchet=cfg.ratchet?state.parts.find(p=>p.id==cfg.ratchet)?.name||'':'';
-    const bit=cfg.bit?state.parts.find(p=>p.id==cfg.bit)?.name||'':'';
-    return[l.date,l.opponent,rl[l.result]||l.result,l.myScore,l.oppScore,l.series||'',blade,ratchet,bit,l.note||''];
-  });
+  const pn=id=>state.parts.find(p=>p.id==id)?.name||'';
+  const headers=['日期','對手','結果','我的分數','對手分數','鋼鐵戰刃','固鎖輪盤','軸心','備注'];
+  const rows=state.personalLogs.map(l=>[
+    l.date,l.opponent,rl[l.result]||l.result,l.myScore,l.oppScore,
+    pn(l.config?.blade),pn(l.config?.ratchet),pn(l.config?.bit),l.note||''
+  ]);
   downloadCSV([headers,...rows],'個人戰績.csv');
 }
 function exportMultiExcel() {
   if(!state.matches.length){showToast('尚無多人記錄','error');return;}
-  const headers=['日期','選手A','A分數','選手B','B分數','勝者','A系列','A零件','B系列','B零件'];
-  const pn=ids=>(ids||[]).map(id=>state.parts.find(p=>p.id==id)?.name||'').filter(Boolean).join(' / ');
-  const rows=state.matches.map(m=>[m.date,m.p1,m.s1,m.p2,m.s2,m.winner,m.p1series||'',pn(m.p1parts),m.p2series||'',pn(m.p2parts)]);
+  const pn=id=>state.parts.find(p=>p.id==id)?.name||'';
+  const cfgStr=cfg=>cfg?['blade','ratchet','bit'].map(k=>pn(cfg[k])).filter(Boolean).join(' / '):'';
+  const headers=['日期','選手A','A分數','選手B','B分數','勝者','A配置','B配置'];
+  const rows=state.matches.map(m=>[m.date,m.p1,m.s1,m.p2,m.s2,m.winner,cfgStr(m.p1Config),cfgStr(m.p2Config)]);
   downloadCSV([headers,...rows],'多人戰績.csv');
 }
 function downloadCSV(data,filename) {
@@ -843,7 +1130,8 @@ function showToast(msg,type='') {
 // ═══════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════
+seedDefaultParts();
 genPlayerInputs();
 document.getElementById('playerCount').dispatchEvent(new Event('input'));
-renderPartTypeSelector();
+initAddForm();
 renderParts();
