@@ -10,8 +10,12 @@
 </head>
 <body>
 
+<!-- ══ NAV ══ -->
 <nav>
-  <div class="logo">⚡ BEY<span>WARRIOR</span></div>
+  <div class="logo">
+    <img class="nav-tbxc-logo" src="images/tbxc-logo.jpg" alt="TBXC">
+    ⚡ BEY<span>WARRIOR</span>
+  </div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="switchPage('scoreboard',this)">🏆 計分板</button>
     <button class="nav-tab" onclick="switchPage('bracket',this)">🗂 賽制</button>
@@ -20,7 +24,13 @@
   </div>
 </nav>
 
-<!-- ══ 計分板 ══ -->
+<!-- ══ 側邊 TBXC 裝飾 ══ -->
+<div class="side-tbxc" id="sideTbxc">
+  <img src="images/tbxc-logo2.jpg" alt="TBXC" class="side-tbxc-img">
+  <div class="side-tbxc-label">T.B.X.C</div>
+</div>
+
+<!-- ══ PAGE 1 計分板 ══ -->
 <div id="page-scoreboard" class="page active">
   <div class="section-header">
     <div class="section-title">陀螺鬥士輔助系統</div>
@@ -50,9 +60,10 @@
     <button class="btn btn-secondary" onclick="resetScores()">🔄 重置</button>
     <button class="btn btn-secondary" onclick="saveMatch()">💾 記錄</button>
   </div>
-  <div class="credit">製作人：OK</div>
+  <div class="credit">製作人：OK｜Taiwan BeybladeX Community</div>
 </div>
 
+<!-- 勝利覆蓋層 -->
 <div class="overlay" id="victoryOverlay">
   <div class="victory-box">
     <div class="victory-crown">👑</div>
@@ -67,7 +78,7 @@
 </div>
 <div class="confetti-wrap" id="confettiWrap"></div>
 
-<!-- ══ 晉級賽 ══ -->
+<!-- ══ PAGE 2 晉級賽 ══ -->
 <div id="page-bracket" class="page">
   <div class="section-header">
     <div class="section-title">晉級賽</div>
@@ -77,7 +88,6 @@
     <button class="inner-tab active" onclick="switchInner('bracket','setup',this)">⚙️ 設定</button>
     <button class="inner-tab" onclick="switchInner('bracket','draw',this)">📋 賽表</button>
   </div>
-
   <div id="bracket-setup" class="inner-page active">
     <div style="max-width:560px;">
       <div class="form-group">
@@ -95,7 +105,6 @@
       </div>
     </div>
   </div>
-
   <div id="bracket-draw" class="inner-page">
     <div class="flex" style="margin-bottom:12px;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-secondary btn-sm" onclick="backToSetup()">← 返回</button>
@@ -106,13 +115,11 @@
       </div>
     </div>
     <div id="finalsArea" style="display:none;"></div>
-    <div class="bk-outer" id="bkOuter">
-      <!-- bkCanvas 在這裡由 JS 動態建立 -->
-    </div>
+    <div class="bk-outer" id="bkOuter"></div>
   </div>
 </div>
 
-<!-- ══ 零件庫 ══ -->
+<!-- ══ PAGE 3 零件庫 ══ -->
 <div id="page-parts" class="page">
   <div class="section-header">
     <div class="section-title">零件資料庫</div>
@@ -123,7 +130,6 @@
     <button class="inner-tab" onclick="switchInner('parts','add',this);initAddForm()">➕ 新增零件</button>
     <button class="inner-tab" onclick="switchInner('parts','stats',this);renderPartStats()">📊 統計</button>
   </div>
-
   <div id="parts-list" class="inner-page active">
     <div class="flex" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
       <input type="text" class="form-input" id="partSearch" placeholder="搜尋零件..." oninput="renderParts()" style="flex:1;min-width:110px;">
@@ -142,66 +148,41 @@
     </div>
     <div class="parts-grid" id="partsGrid"></div>
   </div>
-
   <div id="parts-add" class="inner-page">
     <div class="add-part-form">
       <div class="modal-title">新增零件</div>
-
-      <!-- Step 1: 零件類型 -->
       <div class="form-group">
         <label class="form-label">① 零件類型</label>
         <div class="cat-selector">
-          <div class="cat-btn active" data-cat="blade"   onclick="selectCat('blade',this)">  <div class="cat-icon">⚔️</div><div class="cat-name">鋼鐵戰刃</div></div>
-          <div class="cat-btn"        data-cat="ratchet" onclick="selectCat('ratchet',this)"><div class="cat-icon">⚙️</div><div class="cat-name">固鎖輪盤</div></div>
-          <div class="cat-btn"        data-cat="bit"     onclick="selectCat('bit',this)">    <div class="cat-icon">🔩</div><div class="cat-name">軸心</div></div>
+          <div class="cat-btn active" data-cat="blade" onclick="selectCat('blade',this)"><div class="cat-icon">⚔️</div><div class="cat-name">鋼鐵戰刃</div></div>
+          <div class="cat-btn" data-cat="ratchet" onclick="selectCat('ratchet',this)"><div class="cat-icon">⚙️</div><div class="cat-name">固鎖輪盤</div></div>
+          <div class="cat-btn" data-cat="bit" onclick="selectCat('bit',this)"><div class="cat-icon">🔩</div><div class="cat-name">軸心</div></div>
         </div>
       </div>
-
-      <!-- Step 2: 系列（鋼鐵戰刃才顯示） -->
       <div class="form-group" id="seriesGroup">
         <label class="form-label">② 系列</label>
         <div class="series-selector">
           <div class="series-btn active" data-series="BX" onclick="selectSeries('BX',this)"><div class="series-name">BX</div></div>
-          <div class="series-btn"        data-series="UX" onclick="selectSeries('UX',this)"><div class="series-name">UX</div></div>
-          <div class="series-btn"        data-series="CX" onclick="selectSeries('CX',this)"><div class="series-name">CX</div></div>
+          <div class="series-btn" data-series="UX" onclick="selectSeries('UX',this)"><div class="series-name">UX</div></div>
+          <div class="series-btn" data-series="CX" onclick="selectSeries('CX',this)"><div class="series-name">CX</div></div>
         </div>
       </div>
-
-      <!-- CX 改造配件（CX 才顯示） -->
       <div class="form-group" id="cxModGroup" style="display:none;">
         <label class="form-label">③ CX 改造配件</label>
         <div class="cx-mod-info">名稱將由改造配件自動組合</div>
         <div class="cx-mod-grid">
-          <div class="cx-mod-item">
-            <label class="form-label" style="margin-bottom:5px;">聖獸紋章</label>
-            <select class="form-select" id="cxEmblem"    onchange="updateCxPreview()"><option value="">— 未使用 —</option></select>
-          </div>
-          <div class="cx-mod-item">
-            <label class="form-label" style="margin-bottom:5px;">主要戰刃</label>
-            <select class="form-select" id="cxMainBlade" onchange="updateCxPreview()"><option value="">— 未使用 —</option></select>
-          </div>
-          <div class="cx-mod-item">
-            <label class="form-label" style="margin-bottom:5px;">輔助戰刃</label>
-            <select class="form-select" id="cxSubBlade"  onchange="updateCxPreview()"><option value="">— 未使用 —</option></select>
-          </div>
-          <div class="cx-mod-item">
-            <label class="form-label" style="margin-bottom:5px;">超越戰刃</label>
-            <select class="form-select" id="cxOverBlade" onchange="updateCxPreview()"><option value="">— 未使用 —</option></select>
-          </div>
+          <div class="cx-mod-item"><label class="form-label" style="margin-bottom:5px;">聖獸紋章</label><select class="form-select" id="cxEmblem" onchange="updateCxPreview()"><option value="">— 未使用 —</option></select></div>
+          <div class="cx-mod-item"><label class="form-label" style="margin-bottom:5px;">主要戰刃</label><select class="form-select" id="cxMainBlade" onchange="updateCxPreview()"><option value="">— 未使用 —</option></select></div>
+          <div class="cx-mod-item"><label class="form-label" style="margin-bottom:5px;">輔助戰刃</label><select class="form-select" id="cxSubBlade" onchange="updateCxPreview()"><option value="">— 未使用 —</option></select></div>
+          <div class="cx-mod-item"><label class="form-label" style="margin-bottom:5px;">超越戰刃</label><select class="form-select" id="cxOverBlade" onchange="updateCxPreview()"><option value="">— 未使用 —</option></select></div>
         </div>
         <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="openCxModModal()">➕ 管理 CX 改造零件</button>
-        <!-- CX 名稱預覽 -->
         <div id="cxNamePreview" class="cx-name-preview"></div>
       </div>
-
-      <!-- 名稱欄位（非CX戰刃用） -->
       <div class="form-group" id="nameGroup">
         <label class="form-label" id="nameLabel">③ 零件名稱</label>
-        <!-- BX/UX 用下拉，其餘用輸入 -->
         <div id="nameFieldWrap"></div>
       </div>
-
-      <!-- 旋轉方向（戰刃才顯示） -->
       <div class="form-group" id="spinGroup">
         <label class="form-label">旋轉方向</label>
         <select class="form-select" id="newPartSpin">
@@ -210,16 +191,13 @@
           <option value="雙向">雙向</option>
         </select>
       </div>
-
       <div class="form-group">
         <label class="form-label">備注</label>
         <input class="form-input" id="newPartNote" placeholder="特殊效果...">
       </div>
-
       <button class="btn btn-gold" onclick="addPart()">➕ 新增零件</button>
     </div>
   </div>
-
   <div id="parts-stats" class="inner-page">
     <div class="stats-grid" id="partStatsCards"></div>
     <div class="divider"></div>
@@ -230,7 +208,7 @@
   </div>
 </div>
 
-<!-- ══ 戰績 ══ -->
+<!-- ══ PAGE 4 戰績 ══ -->
 <div id="page-records" class="page">
   <div class="section-header">
     <div class="section-title">戰績記錄</div>
@@ -347,6 +325,39 @@
     <div class="modal-footer">
       <button class="btn btn-secondary btn-sm" onclick="closeModal('personalFormModal')">取消</button>
       <button class="btn btn-gold btn-sm" onclick="savePersonalLog()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TBXC 廣告 ══ -->
+<div class="ad-bar" id="adBar">
+  <div class="ad-collapsed" id="adCollapsed" onclick="expandAd()">
+    <div class="ad-collapsed-inner">
+      <span class="ad-pulse"></span>
+      <span class="ad-collapsed-text">⚡ 戰鬥陀螺X交流空間 T.B.X.C — 點擊了解</span>
+      <span class="ad-collapsed-arrow">▲</span>
+    </div>
+  </div>
+  <div class="ad-expanded" id="adExpanded" style="display:none;">
+    <div class="ad-card">
+      <button class="ad-close-btn" onclick="closeAd()">✕</button>
+      <button class="ad-fold-btn" onclick="foldAd()">▼ 收合</button>
+      <div class="ad-logo-wrap">
+        <img class="ad-logo" src="images/tbxc-logo.jpg" alt="TBXC Logo"
+             onerror="this.parentElement.innerHTML='⚡'">
+      </div>
+      <div class="ad-headline">戰鬥陀螺X交流空間</div>
+      <div class="ad-subline">Taiwan BeybladeX Community</div>
+      <div class="ad-desc">台灣最大 BeybladeX 玩家社群<br>賽事資訊・零件交流・組合攻略</div>
+      <div class="ad-qr-wrap">
+        <img class="ad-qr" src="images/tbxc-qr.jpg" alt="掃碼加入 TBXC"
+             onerror="this.style.display='none'">
+        <div class="ad-qr-label">掃碼加入社群</div>
+      </div>
+      <div class="ad-btns">
+        <a class="ad-join-btn" href="#" target="_blank" rel="noopener">立即加入 →</a>
+      </div>
+      <div class="ad-note">由 BeyWarrior 友情推廣</div>
     </div>
   </div>
 </div>
