@@ -63,11 +63,37 @@ function backToSetup() {
 }
 
 // ═══════════════════════════════════════
-//  SCOREBOARD
+//  音樂控制
 // ═══════════════════════════════════════
-let scores = [0,0], touchTimer = null, touchMoved = false;
+let musicPlaying = false;
+function toggleMusic() {
+  const audio = document.getElementById('bgMusic');
+  const btn   = document.getElementById('musicBtn');
+  if (!audio) return;
+  if (musicPlaying) {
+    audio.pause();
+    musicPlaying = false;
+    btn.classList.remove('playing');
+    btn.textContent = '🎵';
+  } else {
+    audio.play().catch(() => {});
+    musicPlaying = true;
+    btn.classList.add('playing');
+    btn.textContent = '🔊';
+  }
+}
 
-function addScore(p) { scores[p-1]++; updateScoreDisplay(); flashCard(p); }
+// ═══════════════════════════════════════
+//  SCOREBOARD
+//  長按問題修正：用 touchWasLongPress 旗標阻擋長按後的 click
+// ═══════════════════════════════════════
+let scores = [0,0], touchTimer = null, touchMoved = false, touchWasLongPress = false;
+
+function addScore(p) {
+  // 長按觸發過，忽略這次 click
+  if (touchWasLongPress) { touchWasLongPress = false; return; }
+  scores[p-1]++; updateScoreDisplay(); flashCard(p);
+}
 function subScore(p, e) {
   if (e) e.preventDefault();
   if (scores[p-1] > 0) { scores[p-1]--; updateScoreDisplay(); }
@@ -92,11 +118,22 @@ function flashCard(p) {
   setTimeout(() => { card.style.transition = 'all .25s'; card.style.transform = ''; }, 120);
 }
 function touchStart(p, e) {
-  touchMoved = false;
-  touchTimer = setTimeout(() => { if (!touchMoved) subScore(p, null); touchTimer = null; }, 550);
+  touchMoved = false; touchWasLongPress = false;
+  touchTimer = setTimeout(() => {
+    if (!touchMoved) {
+      touchWasLongPress = true;  // 標記長按，阻擋後續 click
+      subScore(p, null);
+    }
+    touchTimer = null;
+  }, 550);
 }
-function touchMove() { touchMoved = true; if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; } }
-function touchEnd()  { if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; } }
+function touchMove() {
+  touchMoved = true;
+  if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+}
+function touchEnd() {
+  if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+}
 
 function declareWinner() {
   const p1 = document.getElementById('p1name').value || '選手 A';
@@ -166,14 +203,13 @@ function generateBracket() {
     gf: mkM('GF',null,null,false), tp: mkM('TP',null,null,false),
     ranking:{}, _paths:{},
   };
-  const outer = document.getElementById('bkOuter');
-  outer.innerHTML='';
-  const canvas=document.createElement('div'); canvas.id='bkCanvas'; canvas.className='bk-canvas';
-  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.id='bkSvg'; svg.className='bk-svg';
+  const outer = document.getElementById('bkOuter'); outer.innerHTML='';
+  const canvas = document.createElement('div'); canvas.id='bkCanvas'; canvas.className='bk-canvas';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.id='bkSvg'; svg.className='bk-svg';
   canvas.appendChild(svg); outer.appendChild(canvas);
-  renderBracketDOM(canvas,svg);
+  renderBracketDOM(canvas, svg);
   switchInner('bracket','draw',null);
-  const tabs=document.querySelectorAll('#page-bracket > .inner-tabs > .inner-tab');
+  const tabs = document.querySelectorAll('#page-bracket > .inner-tabs > .inner-tab');
   tabs[0].classList.remove('active'); tabs[1].classList.add('active');
 }
 
@@ -185,12 +221,12 @@ function resetBracket() {
 }
 
 function buildHalf(players,prefix){
-  const rounds=[];let r0=[];
+  const rounds=[]; let r0=[];
   for(let i=0;i<players.length;i+=2){
     if(i+1<players.length) r0.push(mkM(`${prefix}-0-${r0.length}`,players[i],players[i+1],false));
     else r0.push(mkM(`${prefix}-0-${r0.length}`,players[i],null,true));
   }
-  rounds.push(r0);let prev=r0.length;
+  rounds.push(r0); let prev=r0.length;
   while(prev>1){const cnt=Math.ceil(prev/2);rounds.push(Array.from({length:cnt},(_,i)=>mkM(`${prefix}-${rounds.length}-${i}`,null,null,false)));prev=cnt;}
   return rounds;
 }
@@ -222,7 +258,6 @@ function renderBracketDOM(canvas,svgEl){
   const cX=lCols*(BK_W+BK_COL)+20;
   const lRX=ri=>16+ri*(BK_W+BK_COL);
   const rRX=ri=>canvasW-16-(ri+1)*BK_W-ri*BK_COL;
-
   bk.left.forEach((round,ri)=>{
     round.forEach((match,mi)=>placeMatch(canvas,svgEl,match,lRX(ri),lSY+lC[ri][mi],'left',ri,mi));
     if(ri<bk.left.length-1) round.forEach((match,mi)=>{
@@ -354,7 +389,7 @@ function placeFinals(container,svg,cx,cy){
 function drawConn(svg,fromMatch,toMatch,toKey,x1,y1,x2,y2){
   const mid=(x1+x2)/2,path=mkSvg('path');
   path.setAttribute('d',`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
-  path.classList.add('bk-conn');svg.appendChild(path);
+  path.classList.add('bk-conn'); svg.appendChild(path);
   const key=`${fromMatch.id}→${toMatch.id}-${toKey}`;bk._paths[key]=path;fromMatch._paths[key]=path;
 }
 function mkSvg(tag){return document.createElementNS('http://www.w3.org/2000/svg',tag);}
@@ -573,9 +608,7 @@ function saveMatch(){
 }
 function buildMCUI(player){
   const el=document.getElementById(player==='p1'?'configBuilderP1':'configBuilderP2');
-  const bxB=state.parts.filter(p=>p.cat==='blade'&&p.series==='BX');
-  const uxB=state.parts.filter(p=>p.cat==='blade'&&p.series==='UX');
-  const cxB=state.parts.filter(p=>p.cat==='blade'&&p.series==='CX');
+  const bxB=state.parts.filter(p=>p.cat==='blade'&&p.series==='BX'),uxB=state.parts.filter(p=>p.cat==='blade'&&p.series==='UX'),cxB=state.parts.filter(p=>p.cat==='blade'&&p.series==='CX');
   const ras=state.parts.filter(p=>p.cat==='ratchet'),bis=state.parts.filter(p=>p.cat==='bit');
   const bladeOpts=`<option value="">— 未選 —</option>${bxB.length?`<optgroup label="⚔️ BX">${bxB.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</optgroup>`:''}${uxB.length?`<optgroup label="⚔️ UX">${uxB.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</optgroup>`:''}${cxB.length?`<optgroup label="⚔️ CX">${cxB.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</optgroup>`:''}`;
   const mkRow=(cat,label,opts)=>{
@@ -750,7 +783,6 @@ document.getElementById('playerCount').dispatchEvent(new Event('input'));
 initAddForm();
 renderParts();
 
-// 廣告 session 狀態
 if(sessionStorage.getItem('adClosed')){
   const adBar=document.getElementById('adBar');if(adBar)adBar.style.display='none';
   document.body.classList.add('ad-gone');

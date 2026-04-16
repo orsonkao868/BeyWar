@@ -13,8 +13,9 @@
 <!-- ══ NAV ══ -->
 <nav>
   <div class="logo">
-    <img class="nav-tbxc-logo" src="images/tbxc-logo.jpg" alt="TBXC">
-    ⚡ BEY<span>WARRIOR</span>
+    <img class="nav-tbxc-logo" src="images/tbxc-logo.jpg" alt="TBXC"
+         onerror="this.style.display='none'">
+    <span class="logo-text">⚡ BEY<span>WARRIOR</span></span>
   </div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="switchPage('scoreboard',this)">🏆 計分板</button>
@@ -22,11 +23,17 @@
     <button class="nav-tab" onclick="switchPage('parts',this)">⚙️ 零件庫</button>
     <button class="nav-tab" onclick="switchPage('records',this)">📊 戰績</button>
   </div>
+  <button class="nav-music-btn" id="musicBtn" onclick="toggleMusic()" title="背景音樂">🎵</button>
 </nav>
+
+<audio id="bgMusic" loop>
+  <source src="music/bgm.mp3" type="audio/mpeg">
+</audio>
 
 <!-- ══ 側邊 TBXC 裝飾 ══ -->
 <div class="side-tbxc" id="sideTbxc">
-  <img src="images/tbxc-logo2.jpg" alt="TBXC" class="side-tbxc-img">
+  <img src="images/tbxc-logo2.jpg" alt="TBXC" class="side-tbxc-img"
+       onerror="this.style.display='none'">
   <div class="side-tbxc-label">T.B.X.C</div>
 </div>
 
